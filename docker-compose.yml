@@ -1,0 +1,259 @@
+# ==============================================================================
+# SpiderManage — Docker Compose 编排文件
+# ==============================================================================
+#
+# 本文件定义了 SpiderManage 平台的完整服务栈：
+#   - db       : PostgreSQL 数据库（持久存储爬虫/任务/用户等业务数据）
+#   - redis    : Redis 缓存与消息队列（任务分发、实时日志 Pub/Sub、心跳状态）
+#   - minio    : MinIO 对象存储（存储爬虫代码 ZIP 包，供 Worker 下载）
+#   - master   : FastAPI 主控服务（提供 REST API + 调度器 + 心跳 + 任务消费）
+#   - worker   : Worker 爬虫节点（消费任务队列，通过 DooD 启动爬虫容器执行）
+#
+# 配置覆盖机制（pydantic-settings 优先级）：
+#   环境变量 (本文件 environment) > .env 文件 > config.py 代码默认值
+#   因此，所有运行参数只需在本文件修改即可，无需改动代码。
+#
+# 异机部署说明：
+#   如果 db / redis / minio 部署在不同机器上，只需将下方 x-common-env 中的
+#   服务名（如 db、redis、minio）替换为对应机器的真实 IP 或域名即可。
+#   DOCKER_NETWORK 无需更改，它仅作用于本机 Docker 守护进程。
+# ==============================================================================
+
+version: '3.8'
+
+# ============================
+# 共享时区配置
+# ============================
+x-timezone: &timezone Asia/Shanghai
+
+# ============================
+# 凭据定义（单一事实来源）
+# 修改密码只需改这里一处，所有引用处自动生效
+# ============================
+
+# PostgreSQL 数据库凭据
+x-pg-credentials: &pg-credentials
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgrespassword
+  POSTGRES_DB: spidermanage
+
+# MinIO 对象存储凭据（同时被 minio 服务本身和后端服务引用）
+x-minio-credentials: &minio-credentials
+  MINIO_ROOT_USER: minioadmin
+  MINIO_ROOT_PASSWORD: minioadmin
+
+# ============================
+# 共享环境变量（YAML 锚点 &common-env）
+# master 和 worker 通过 <<: *common-env 引用此块
+# 所有键名与 backend/config.py 中 Settings 类的字段名严格一致
+# ============================
+x-common-env:
+
+  # ── 数据库连接 ──
+  # 格式: postgresql+asyncpg://用户名:密码@主机:端口/数据库名
+  # 异机部署时将 "db" 替换为 PostgreSQL 所在机器的 IP 或域名
+  &common-env
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgrespassword}@db:5432/${POSTGRES_DB:-spidermanage}
+
+  # ── Redis 连接 ──
+  # 用途：任务队列（BLPOP/LPUSH）、实时日志推送（Pub/Sub）、心跳状态存储、任务状态缓存
+  # 异机部署时将 "redis" 替换为 Redis 所在机器的 IP 或域名
+  REDIS_URL: redis://redis:6379/0
+  REDIS_MAX_CONNECTIONS: 100 # 异步连接池最大连接数
+  REDIS_SOCKET_TIMEOUT: 5.0 # 单次 Socket 操作超时（秒）
+
+  # ── MinIO 对象存储 ──
+  # Master 上传爬虫代码 ZIP 到 MinIO，Worker 的爬虫容器通过 HTTP 从 MinIO 下载
+  # 异机部署时将 "minio:9000" 替换为 MinIO 所在机器的 IP:端口 或域名
+  MINIO_ENDPOINT: minio:9000
+  <<: *minio-credentials # 展开 MINIO_ROOT_USER / MINIO_ROOT_PASSWORD
+  MINIO_BUCKET_NAME: spidermanage-projects # 代码包存储桶名称
+
+  # ── 安全配置 ──
+  SECRET_KEY: change-me-in-production-use-a-long-random-string # JWT 签名密钥，生产环境务必替换！
+  ACCESS_TOKEN_EXPIRE_MINUTES: 10080 # JWT Token 有效期（分钟），默认 7 天
+
+  # ── 心跳配置 ──
+  # Worker/Master 节点定期向 Redis 写入系统状态（CPU/内存/磁盘），供前端大盘展示
+  HEARTBEAT_INTERVAL: 5 # 心跳发送间隔（秒）
+  HEARTBEAT_TTL: 15 # 心跳 Redis 键过期时间（秒），超时视为节点离线
+
+  # ── APScheduler 调度器配置 ──
+  # 用于定时任务（Cron Job），仅 Master 节点启动
+  SCHEDULER_THREAD_POOL_SIZE: 20 # 调度器线程池大小
+  SCHEDULER_MAX_INSTANCES: 3 # 同一 Job 最大并发实例数
+
+  # ── 任务状态配置 ──
+  TASK_STATUS_EXPIRE_SECONDS: 604800 # 任务状态在 Redis 中的过期时间（秒），默认 7 天
+
+  # ── Docker 容器资源限制 (DooD) ──
+  # 以下参数控制 Worker 通过 DockerManager 动态创建的「爬虫容器」的资源配额。
+  # 这些值会通过 pydantic-settings 自动注入到 config.py 的同名 Settings 字段中，
+  # 优先级：环境变量 (此处) > .env 文件 > config.py 代码默认值。
+  # 因此，修改此处即可覆盖 config.py 中的默认配置，无需改动代码。
+  #
+  # DOCKER_MEM_LIMIT  — 单个爬虫容器的最大内存，超限将被 OOM Kill（格式: 256m / 1g）
+  DOCKER_MEM_LIMIT: 512m
+  # DOCKER_CPU_PERIOD — Linux CFS 调度器的周期，单位微秒 (µs)，一般保持 100000 不变
+  DOCKER_CPU_PERIOD: 100000
+  # DOCKER_CPU_QUOTA  — 在一个 CPU_PERIOD 内容器可使用的 CPU 时间 (µs)
+  #                     100000 = 1 核; 50000 = 0.5 核; 200000 = 2 核
+  DOCKER_CPU_QUOTA: 100000
+  # DOCKER_NETWORK    — 爬虫容器接入的 Docker 网络，必须与下方 networks 段的 name 一致，
+  #                     以便容器能通过服务名（如 minio / redis）访问基础设施。
+  #                     此值为本机 Docker 网络标识符，跨机器部署无需修改。
+  DOCKER_NETWORK: spidermanage_net
+
+  # ── 时区 ──
+  TZ: *timezone
+
+# ==============================================================================
+# 服务定义
+# ==============================================================================
+services:
+
+  # ────────────────────────────────────────────
+  # PostgreSQL 数据库
+  # 持久化存储：爬虫配置、任务记录、用户账户、日志等
+  # ────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: spidermanage_db
+    restart: always
+    environment:
+      <<: *pg-credentials
+      TZ: *timezone
+    ports:
+      - "5432:5432" # 宿主机端口:容器端口，可按需修改左侧宿主机端口
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # 数据持久化到 Docker Volume
+    networks:
+      - spidermanage_net
+
+  # ────────────────────────────────────────────
+  # Redis 缓存与消息队列
+  # 用途：任务队列分发 (BLPOP)、实时日志推送 (Pub/Sub)、
+  #       节点心跳状态、任务运行状态缓存
+  # ────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: spidermanage_redis
+    restart: always
+    environment:
+      TZ: *timezone
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data # Redis 持久化（RDB/AOF）
+    networks:
+      - spidermanage_net
+
+  # ────────────────────────────────────────────
+  # MinIO 对象存储
+  # 用途：存储爬虫项目的代码 ZIP 包
+  # 工作流：Master 上传 ZIP → Worker 爬虫容器通过 HTTP 下载
+  # 管理控制台：http://localhost:9001（用户名/密码见 minio-credentials）
+  # ────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: spidermanage_minio
+    restart: always
+    ports:
+      - "9000:9000" # S3 API 端口
+      - "9001:9001" # Web 管理控制台端口
+    environment:
+      <<: *minio-credentials
+      TZ: *timezone
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - spidermanage_net
+
+  # ────────────────────────────────────────────
+  # Master — 主控 API 服务
+  # 职责：
+  #   1. 提供 REST API（爬虫管理、任务管理、用户认证等）
+  #   2. 运行 APScheduler 定时任务调度器
+  #   3. 发送节点心跳
+  #   4. 同时也消费任务队列（Master + Worker 双角色）
+  # ────────────────────────────────────────────
+  master:
+    build:
+      context: ./backend # 构建上下文为 backend 目录
+      dockerfile: Dockerfile
+    container_name: spidermanage_master
+    restart: always
+    ports:
+      - "8000:8000" # FastAPI 服务端口
+    volumes:
+      # 挂载宿主机 Docker Socket，实现 DooD（Docker-outside-of-Docker）
+      # 使 Master/Worker 容器内的 DockerManager 能直接调用宿主机 Docker 守护进程
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      <<: *common-env # 引入全部共享环境变量
+      NODE_ROLE: master # 节点角色标识，Master 会启动调度器和 MinIO 客户端
+      NODE_ID: docker-master-node # 节点唯一 ID，用于心跳上报和任务路由
+    depends_on:
+      - db
+      - redis
+      - minio
+    networks:
+      - spidermanage_net
+
+  # ────────────────────────────────────────────
+  # Worker — 爬虫执行节点
+  # 职责：
+  #   1. 通过 BLPOP 监听 Redis 任务队列（专属队列 + 公共队列）
+  #   2. 收到任务后，通过 DockerManager 在宿主机上启动爬虫容器
+  #   3. 爬虫容器自动完成：下载代码 → 解压 → 执行脚本
+  #   4. 流式采集容器日志并推送 Redis Pub/Sub + 写入数据库
+  #
+  # 水平扩容方式（多 Worker 部署）：
+  #   建议直接使用 docker-compose 命令行参数进行扩容：
+  #   docker compose up -d --scale worker=3
+  #   ⚠️ 注意：为了支持这种原生扩容，下方已注释掉 `container_name` 和 `NODE_ID`。
+  #   去掉 `NODE_ID` 后，程序会自动为每个容器生成唯一 UUID 作为节点标识，防止队列冲突。
+  # ────────────────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # ⚠️ 多 Worker 扩容时，必须注释或删除下方 NODE_ID 和 container_name
+    # container_name: spidermanage_worker
+    restart: always
+    command: python worker_main.py # 覆盖 Dockerfile 默认的 uvicorn 启动命令
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # DooD 必需
+    environment:
+      <<: *common-env
+      NODE_ROLE: worker # Worker 不启动调度器和 MinIO 初始化
+      # NODE_ID: docker-worker-node # ⚠️ 注释以自动生成 UUID，防止多 Worker 占用同一专属队列
+    depends_on:
+      - db
+      - redis
+      - minio
+    networks:
+      - spidermanage_net
+
+# ==============================================================================
+# 持久化卷声明
+# Docker 管理的命名卷，数据在容器重建后依然保留
+# 清理命令：docker volume rm spidermanage_postgres_data 等
+# ==============================================================================
+volumes:
+  postgres_data: # PostgreSQL 数据文件
+  redis_data: # Redis 持久化数据
+  minio_data:
+    # MinIO 对象存储数据
+
+    # ==============================================================================
+    # 网络定义
+    # name 属性固定网络名为 "spidermanage_net"，避免 Docker Compose 自动添加项目名前缀。
+    # 这一点至关重要：Worker 通过 Docker SDK 创建的爬虫容器需要通过此精确名称接入网络，
+    # 才能与 minio / redis 等服务互通。
+    # ==============================================================================
+networks:
+  spidermanage_net:
+    name: spidermanage_net # 固定网络名，不受 docker-compose 项目名前缀影响
+    driver: bridge # 单机桥接网络，适用于同机部署

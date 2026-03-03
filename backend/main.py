@@ -1,0 +1,107 @@
+import contextlib
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.common.logger import setup_logging, bind_app
+setup_logging()
+
+from app.api.monitor.router import router as monitor_router
+from app.api.logs.router import router as logs_router
+from app.api.messages.router import router as messages_router
+from app.api.nodes.router import router as nodes_router
+from app.api.tasks.router import router as tasks_router
+from app.api.projects.router import router as projects_router
+from app.api.spiders.router import router as spiders_router
+from app.api.users.router import router as users_router
+from app.api.dashboard.router import router as dashboard_router
+from app.common.redis import redis_manager
+from app.core.scheduler import start_scheduler, shutdown_scheduler
+from config import settings
+from app.common.storage.minio_client import minio_manager
+from app.worker.heartbeat import start_heartbeat_task
+from app.db.database import create_tables
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    await redis_manager.init_pool()
+    create_tables()
+
+    # 启动时清理孤儿任务：将上次未正常结束的 running/pending 任务统一标记为 error
+    try:
+        from app.db.database import async_session_maker
+        from app.api.tasks.models import SpiderTask
+        from sqlalchemy import update
+        from datetime import datetime
+
+        async with async_session_maker() as session:
+            result = await session.execute(
+                update(SpiderTask)
+                .where(SpiderTask.status.in_(["running", "pending"]))
+                .values(
+                    status="error",
+                    error_detail="Orphaned: server restarted before task completed",
+                    finished_at=datetime.utcnow(),
+                )
+            )
+            await session.commit()
+            if result.rowcount > 0:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Cleaned up {result.rowcount} orphaned task(s) on startup"
+                )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to clean orphaned tasks: {e}")
+    
+    node_role = getattr(settings, "NODE_ROLE", "master")
+    heartbeat_task = None
+    task_listener_task = None
+
+    if node_role != "worker":
+        start_scheduler()
+        minio_manager.init_client()
+        heartbeat_task = await start_heartbeat_task()
+
+    # master 和 worker 都可以消费任务队列
+    from app.worker.executor import start_task_listener
+    task_listener_task = await start_task_listener()
+        
+    yield
+    
+    if task_listener_task:
+        task_listener_task.cancel()
+    if node_role != "worker":
+        if heartbeat_task:
+            heartbeat_task.cancel()
+        shutdown_scheduler()
+    await redis_manager.close_pool()
+
+app = FastAPI(title="SpiderManage API", lifespan=lifespan)
+bind_app(app)  # 注册全局请求异常处理器，将 500 错误写入 error.log
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---- 业务路由 ----
+app.include_router(monitor_router, prefix="/api/monitor", tags=["监控"])
+app.include_router(logs_router, prefix="/api/logs", tags=["日志"])
+app.include_router(messages_router, prefix="/api/messages", tags=["消息"])
+app.include_router(nodes_router, prefix="/api/nodes", tags=["节点管理"])
+app.include_router(projects_router, prefix="/api/projects", tags=["项目管理"])
+app.include_router(spiders_router, prefix="/api/spiders", tags=["爬虫管理"])
+app.include_router(tasks_router, prefix="/api/tasks", tags=["任务管理"])
+app.include_router(users_router, prefix="/api/users", tags=["用户"])
+app.include_router(dashboard_router, prefix="/api/dashboard", tags=["大盘"])
+
+# 独立注册 WebSocket 路由，避免 Router 前缀干扰
+from app.api.tasks.router import websocket_task_logs
+app.add_api_websocket_route("/ws-logs/{task_id}", websocket_task_logs)
+
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to SpiderManage API"}

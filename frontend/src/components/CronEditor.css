@@ -1,0 +1,273 @@
+/* ─────────────────────────────────────────────────
+   CronEditor v2 — 可视化 Cron 编辑器
+   ───────────────────────────────────────────────── */
+
+.cron-editor-v2 {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ── 预设快选 ── */
+.cev2-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.cev2-preset {
+    padding: 5px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    color: var(--text-secondary, #9ca3af);
+    border-radius: 16px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.cev2-preset:hover {
+    border-color: var(--text-muted, #6b7280);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.cev2-preset.active {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.15);
+}
+
+/* ── 字段选择区域 ── */
+.cev2-fields {
+    display: flex;
+    gap: 6px;
+}
+
+/* ── 单个字段选择器 ── */
+.ce-field {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+.ce-field-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 0.78rem;
+    color: var(--text-secondary, #9ca3af);
+}
+
+.ce-field-trigger:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.ce-field-trigger.active {
+    border-color: rgba(59, 130, 246, 0.35);
+    background: rgba(59, 130, 246, 0.06);
+}
+
+.ce-field-trigger.active .ce-field-value {
+    color: #60a5fa;
+}
+
+.ce-field-label {
+    font-size: 0.68rem;
+    color: var(--text-muted, #6b7280);
+    flex-shrink: 0;
+    font-weight: 600;
+}
+
+.ce-field-value {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+    color: var(--text-primary, #e5e7eb);
+    font-size: 0.75rem;
+}
+
+.ce-field-arrow {
+    flex-shrink: 0;
+    color: var(--text-muted, #6b7280);
+    transition: transform 0.15s;
+}
+
+.ce-field-arrow.up {
+    transform: rotate(180deg);
+}
+
+/* ── 下拉面板 ── */
+.ce-field-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    min-width: 140px;
+    background: var(--bg-surface, #1e1f33);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 10px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    animation: cev2-dropdown-in 0.12s ease;
+    overflow: hidden;
+}
+
+@keyframes cev2-dropdown-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ce-field-dropdown-title {
+    padding: 8px 12px 4px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted, #6b7280);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ce-field-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 10px 8px;
+}
+
+.ce-field-option {
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    color: var(--text-secondary, #9ca3af);
+    cursor: pointer;
+    transition: all 0.12s;
+    white-space: nowrap;
+}
+
+.ce-field-option:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+.ce-field-option.selected {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* ── 自定义输入 ── */
+.ce-field-custom {
+    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+    padding: 6px 10px 8px;
+}
+
+.ce-field-custom-input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 5px;
+    padding: 5px 8px;
+    font-size: 0.72rem;
+    font-family: monospace;
+    color: #fff;
+    outline: none;
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+}
+
+.ce-field-custom-input:focus {
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+.ce-field-custom-input::placeholder {
+    color: var(--text-muted, #6b7280);
+}
+
+/* ── 底部：原始输入 + 描述 ── */
+.cev2-bottom {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.cev2-raw {
+    display: flex;
+    align-items: center;
+    background: var(--bg-primary, #0f1019);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+    flex-shrink: 0;
+}
+
+.cev2-raw:focus-within {
+    border-color: var(--accent-primary, #3b82f6);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.cev2-raw-label {
+    padding: 7px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-muted, #6b7280);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    border-right: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.cev2-raw-input {
+    background: transparent;
+    border: none;
+    padding: 7px 12px;
+    color: var(--accent-primary, #60a5fa);
+    font-size: 0.85rem;
+    font-weight: 500;
+    font-family: 'JetBrains Mono', monospace;
+    outline: none;
+    letter-spacing: 0.08em;
+    width: 140px;
+}
+
+.cev2-desc {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.08);
+    padding: 7px 14px;
+    border-radius: 8px;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cev2-desc svg {
+    flex-shrink: 0;
+}

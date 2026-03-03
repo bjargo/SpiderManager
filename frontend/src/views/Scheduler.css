@@ -1,0 +1,575 @@
+/* ─────────────────────────────── 容器 ─────────────────────────────── */
+.sch-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ─────────────────────────────── 顶栏 ─────────────────────────────── */
+.sch-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+}
+
+.sch-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.sch-header-left h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.sch-count {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+}
+
+/* ─────────────────────────────── 按钮 ─────────────────────────────── */
+.sch-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.sch-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.sch-btn-primary {
+    background: var(--accent-primary);
+    color: #fff;
+}
+
+.sch-btn-primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+}
+
+.sch-btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.sch-btn-ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sch-btn-danger {
+    background: var(--status-offline);
+    color: #fff;
+}
+
+.sch-btn-danger:hover:not(:disabled) {
+    filter: brightness(1.1);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+}
+
+/* ─────────────────────────────── 表格 ─────────────────────────────── */
+.sch-table-wrap {
+    overflow: hidden;
+}
+
+.sch-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sch-table th {
+    text-align: left;
+    padding: 14px 20px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.sch-table td {
+    padding: 15px 20px;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.sch-table tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.sch-table tr:last-child td {
+    border-bottom: none;
+}
+
+.sch-table tr.row-disabled td {
+    opacity: 0.45;
+}
+
+/* 爬虫单元格 */
+.sch-spider-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sch-spider-icon {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+/* Cron 标签 */
+.sch-cron-tag {
+    background: var(--bg-tertiary);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-family: 'Consolas', monospace;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--accent-primary);
+}
+
+/* 描述列 */
+.sch-desc-cell {
+    color: var(--text-secondary);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 目标节点列 */
+.sch-nodes-cell {
+    max-width: 200px;
+}
+
+.sch-node-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sch-node-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.sch-node-tag.public {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.2);
+    color: var(--status-online, #10b981);
+}
+
+/* 下次执行时间 */
+.sch-time-cell {
+    color: var(--text-secondary);
+}
+
+.sch-next-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
+
+/* 操作列 */
+.sch-actions-cell {
+    text-align: right;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.sch-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 6px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+}
+
+.sch-icon-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.sch-icon-btn.delete:hover {
+    color: var(--status-offline);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* ─────────────────────────────── Switch 开关 ─────────────────────────────── */
+.sch-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.25s ease;
+    outline: none;
+    padding: 0;
+}
+
+.sch-switch.on {
+    background: var(--status-online, #10b981);
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.sch-switch.off {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+}
+
+.sch-switch.loading {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.sch-switch-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.sch-switch.on .sch-switch-thumb {
+    transform: translateX(20px);
+}
+
+/* ─────────────────────────────── 空态 ─────────────────────────────── */
+.sch-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 64px 24px;
+    color: var(--text-muted);
+}
+
+.sch-empty p {
+    font-size: 0.9rem;
+}
+
+/* ─────────────────────────────── 模态框 ─────────────────────────────── */
+.sch-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.sch-modal {
+    width: 540px;
+    max-width: calc(100vw - 48px);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+}
+
+.sch-modal-sm {
+    width: 420px;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.sch-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sch-modal-header h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.sch-modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    transition: color 0.2s;
+}
+
+.sch-modal-close:hover {
+    color: var(--text-primary);
+}
+
+.sch-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.sch-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* ─────────────────────────────── 表单字段 ─────────────────────────────── */
+.sch-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sch-field label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.sch-input,
+.sch-select {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+    appearance: auto;
+}
+
+.sch-input:focus,
+.sch-select:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.sch-select {
+    cursor: pointer;
+}
+
+/* ─────────────────────────────── 节点选择器 ─────────────────────────────── */
+.sch-node-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sch-node-empty {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    padding: 10px 0;
+}
+
+.sch-node-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 0.85rem;
+}
+
+.sch-node-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--text-muted);
+}
+
+.sch-node-item.selected {
+    border-color: var(--accent-primary);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.sch-node-item input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+    flex-shrink: 0;
+}
+
+.sch-node-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.sch-node-name {
+    font-weight: 500;
+    color: #fff;
+    flex: 1;
+}
+
+.sch-node-info {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+.sch-node-hint {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    padding-top: 4px;
+}
+
+/* ─────────────────────────────── 删除确认 ─────────────────────────────── */
+.sch-confirm-text {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.sch-confirm-text strong {
+    color: #fff;
+}
+
+/* ─────────────────────────────── Toast ─────────────────────────────── */
+.sch-toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 2000;
+}
+
+.sch-toast {
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #fff;
+    backdrop-filter: blur(8px);
+    animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+}
+
+@keyframes toastIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.sch-toast-success {
+    background: rgba(16, 185, 129, 0.9);
+}
+
+.sch-toast-error {
+    background: rgba(239, 68, 68, 0.9);
+}
+
+.sch-toast-info {
+    background: rgba(59, 130, 246, 0.9);
+}
+
+/* ─────────────────────────────── 动画 ─────────────────────────────── */
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}

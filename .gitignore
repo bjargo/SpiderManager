@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Node.js
+node_modules/
+dist/
+.DS_Store
+
+# Logs
+log/
+*.log
+
+# Database
+*.sqlite
+data/
+db.sqlite3
+
+# IDEs
+.idea/
+.vscode/
+
+# Project specific
+backend/venv/
+backend/__pycache__/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite
+frontend/.env
+task.md

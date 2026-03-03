@@ -1,0 +1,29 @@
+# Ignore local environment and cache
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Ignore environment config files
+.env
+.env.*
+.node_id
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+
+# Ignore test results and coverage
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# Ignore local storage data
+data/
+downloads/
+logs/

@@ -1,0 +1,349 @@
+.tm-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.tm-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+}
+
+.tm-toolbar-left h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+}
+
+.tm-count {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.tm-filters {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.tm-filter-item select {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.tm-filter-item select:focus {
+    border-color: var(--accent-primary);
+}
+
+.tm-btn-refresh {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tm-btn-refresh:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.tm-content {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    position: relative;
+}
+
+.tm-log-drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+}
+
+.tm-log-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 600px;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+}
+
+.tm-log-drawer .log-terminal-wrapper {
+    height: 100% !important;
+    border-radius: 0;
+    border: none;
+}
+
+.tm-table-wrap {
+    overflow: hidden;
+    padding-bottom: 8px;
+}
+
+.tm-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    table-layout: fixed;
+}
+
+.tm-table th {
+    text-align: left;
+    padding: 14px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-secondary);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tm-table td {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    transition: background 0.2s;
+}
+
+.tm-table tr {
+    cursor: default;
+}
+
+.tm-table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.tm-table tr.active-row {
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.tm-table tr.active-row td {
+    border-bottom-color: rgba(59, 130, 246, 0.2);
+}
+
+.tm-id {
+    font-family: monospace;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+.tm-spider {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
+.tm-node {
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+.tm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.tm-badge.success {
+    background: rgba(16, 185, 129, 0.1);
+    color: #4ade80;
+}
+
+.tm-badge.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+}
+
+.tm-badge.running {
+    background: rgba(59, 130, 246, 0.1);
+    color: #60a5fa;
+}
+
+.tm-badge.pending {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+}
+
+.tm-time {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.tm-duration {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.tm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.tm-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tm-action-btn.stop {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.tm-action-btn.stop:hover:not(:disabled) {
+    background: #ef4444;
+    color: #fff;
+}
+
+.tm-action-btn.delete {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+}
+
+.tm-action-btn.delete:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.tm-action-btn.log {
+    background: rgba(59, 130, 246, 0.08);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.tm-action-btn.log:hover {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93bbfd;
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+.tm-empty {
+    text-align: center;
+    padding: 60px 0;
+    color: var(--text-muted);
+}
+
+.tm-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 20px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.tm-pagination button {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tm-pagination button:hover:not(:disabled) {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.tm-pagination button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+
+.spin {
+    animation: tm-spin 1.5s linear infinite;
+}
+
+@keyframes tm-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeInDown 0.3s ease-out;
+}
+
+
+
+@keyframes fadeInRight {
+    from {
+        opacity: 0;
+        transform: translateX(40px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.animate-fade-in-right {
+    animation: fadeInRight 0.3s ease-out;
+}

@@ -1,0 +1,171 @@
+.log-terminal-wrapper {
+    background: #000000;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    height: 520px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+}
+
+.term-header {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background: #111;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.term-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.term-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    font-family: inherit;
+}
+
+.status-dot-blink {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.term-status.connected .status-dot-blink {
+    background: #10b981;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+}
+
+.term-status.connecting .status-dot-blink {
+    background: #f59e0b;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+    animation: pulse 1.5s infinite;
+}
+
+.term-status.error .status-dot-blink,
+.term-status.closed .status-dot-blink {
+    background: #ef4444;
+}
+
+.term-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.term-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.term-btn.stop-btn-red {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 4px 12px;
+    border-radius: 20px;
+    gap: 6px;
+    margin: 0 4px;
+}
+
+.term-btn.stop-btn-red:hover {
+    background: #ef4444;
+    color: #fff;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+}
+
+.term-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.term-btn.close:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.term-body {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.85rem;
+    color: #00ff00;
+    /* Classic green terminal color for a wow factor */
+    line-height: 1.5;
+}
+
+/* Custom terminal scrollbar */
+.term-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.term-body::-webkit-scrollbar-track {
+    background: #000;
+}
+
+.term-body::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 3px;
+}
+
+.term-body::-webkit-scrollbar-thumb:hover {
+    background: #444;
+}
+
+.term-empty-state {
+    display: flex;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+    font-family: monospace;
+}
+
+.term-content {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.log-line {
+    margin-bottom: 2px;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 0.5;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}

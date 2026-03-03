@@ -1,0 +1,198 @@
+/* ─────────────────────────────────────────────────
+   TaskLogModal — 任务日志查看
+   ───────────────────────────────────────────────── */
+
+.tl-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: tl-fade-in 0.2s ease;
+}
+
+@keyframes tl-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.tl-container {
+    width: 80vw;
+    height: 80vh;
+    max-width: 1200px;
+    background: var(--bg-surface, #1a1b2e);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+    animation: tl-slide-up 0.25s ease;
+}
+
+@keyframes tl-slide-up {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.tl-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    background: rgba(255, 255, 255, 0.02);
+    flex-shrink: 0;
+}
+
+.tl-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tl-header-left h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #fff;
+    margin: 0;
+}
+
+.tl-status-badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.tl-close-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary, #9ca3af);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    transition: all 0.15s ease;
+}
+
+.tl-close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+/* 终端风格日志区 */
+.tl-terminal {
+    flex: 1;
+    overflow-y: auto;
+    background: #0d1117;
+    padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #c9d1d9;
+}
+
+.tl-terminal::-webkit-scrollbar {
+    width: 6px;
+}
+
+.tl-terminal::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.tl-log-line {
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.tl-log-line.system {
+    color: #8b949e;
+    font-style: italic;
+}
+
+.tl-log-line.error {
+    color: #f85149;
+}
+
+.tl-terminal-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px;
+    color: var(--text-muted, #6b7280);
+    font-size: 0.85rem;
+}
+
+.tl-terminal-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 60px;
+    color: var(--text-muted, #6b7280);
+    font-size: 0.88rem;
+}
+
+.tl-live-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #4ade80;
+}
+
+.tl-live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #4ade80;
+    animation: tl-pulse 1.5s infinite;
+}
+
+@keyframes tl-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}
+
+.tl-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 16px;
+    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+    background: rgba(0, 0, 0, 0.15);
+    font-size: 0.75rem;
+    color: var(--text-muted, #6b7280);
+    flex-shrink: 0;
+}
