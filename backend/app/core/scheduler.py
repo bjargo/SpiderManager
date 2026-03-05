@@ -1,7 +1,6 @@
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.redis import RedisJobStore
-from apscheduler.executors.pool import ThreadPoolExecutor
 
 from config import settings
 
@@ -18,17 +17,15 @@ jobstores = {
     )
 }
 
-# 使用默认的 AsyncIOScheduler 避免阻塞主线程
-executors = {
-    'default': ThreadPoolExecutor(settings.SCHEDULER_THREAD_POOL_SIZE)
-}
-
+# ⚠️ 不要为 AsyncIOScheduler 配置 ThreadPoolExecutor！
+# AsyncIOScheduler 本身已使用 AsyncIOExecutor（默认），能在当前事件循环中直接 await 异步 job。
+# ThreadPoolExecutor 无法 await coroutine，会触发 "coroutine was never awaited" 并阻塞事件循环。
 job_defaults = {
     'coalesce': False,
     'max_instances': settings.SCHEDULER_MAX_INSTANCES
 }
 
-scheduler = AsyncIOScheduler(jobstores=jobstores, executors=executors, job_defaults=job_defaults)
+scheduler = AsyncIOScheduler(jobstores=jobstores, job_defaults=job_defaults)
 
 def start_scheduler():
     if not scheduler.running:

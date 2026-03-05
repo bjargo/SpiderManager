@@ -33,6 +33,7 @@ def create_tables() -> None:
     import app.api.users.models  # noqa: F401
     import app.api.tasks.models  # noqa: F401
     import app.api.tasks.task_log_models  # noqa: F401
+    import app.api.audit.models  # noqa: F401
     try:
         SQLModel.metadata.create_all(_sync_engine)
         logger.info("Database tables created/verified successfully.")

@@ -8,8 +8,10 @@
 .tm-toolbar {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     padding: 16px 24px;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .tm-toolbar-left h2 {
@@ -30,7 +32,8 @@
 .tm-filters {
     display: flex;
     align-items: center;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .tm-filter-item select {
@@ -60,12 +63,97 @@
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
+    flex-shrink: 0;
 }
 
 .tm-btn-refresh:hover:not(:disabled) {
     background: var(--bg-hover);
     color: var(--accent-primary);
     border-color: var(--accent-primary);
+}
+
+/* ── 日期筛选区 ── */
+.tm-date-range {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 4px 10px;
+}
+
+.tm-date-shortcuts {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-right: 8px;
+    border-right: 1px solid var(--border-color);
+}
+
+.tm-shortcut-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.18s;
+    white-space: nowrap;
+}
+
+.tm-shortcut-btn:hover {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: var(--accent-primary);
+}
+
+.tm-date-inputs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tm-date-picker {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    outline: none;
+    transition: border-color 0.2s;
+    cursor: pointer;
+    /* calendar icon color fix for dark bg */
+    color-scheme: dark;
+}
+
+.tm-date-picker:focus {
+    border-color: var(--accent-primary);
+}
+
+.tm-date-sep {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    user-select: none;
+}
+
+.tm-btn-clear {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 4px;
+    transition: color 0.2s;
+    flex-shrink: 0;
+}
+
+.tm-btn-clear:hover {
+    color: #f87171;
 }
 
 .tm-content {

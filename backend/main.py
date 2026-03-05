@@ -1,6 +1,11 @@
 import contextlib
+
+import logging
+logger = logging.getLogger(__name__)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator, metrics
 
 from app.common.logger import setup_logging, bind_app
 setup_logging()
@@ -14,24 +19,33 @@ from app.api.projects.router import router as projects_router
 from app.api.spiders.router import router as spiders_router
 from app.api.users.router import router as users_router
 from app.api.dashboard.router import router as dashboard_router
+from app.api.admin.router import router as admin_router
 from app.common.redis import redis_manager
 from app.core.scheduler import start_scheduler, shutdown_scheduler
 from config import settings
+from app.common.timezone import now
 from app.common.storage.minio_client import minio_manager
 from app.worker.heartbeat import start_heartbeat_task
 from app.db.database import create_tables
+from app.db.init_data import init_superuser
+
+
+
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     await redis_manager.init_pool()
     create_tables()
 
+    # 初始化默认超级管理员
+    if settings.FIRST_SUPERUSER_EMAIL and settings.FIRST_SUPERUSER_PASSWORD:
+        await init_superuser(settings.FIRST_SUPERUSER_EMAIL, settings.FIRST_SUPERUSER_PASSWORD)
+
     # 启动时清理孤儿任务：将上次未正常结束的 running/pending 任务统一标记为 error
     try:
         from app.db.database import async_session_maker
         from app.api.tasks.models import SpiderTask
         from sqlalchemy import update
-        from datetime import datetime
 
         async with async_session_maker() as session:
             result = await session.execute(
@@ -40,18 +54,16 @@ async def lifespan(app: FastAPI):
                 .values(
                     status="error",
                     error_detail="Orphaned: server restarted before task completed",
-                    finished_at=datetime.utcnow(),
+                    finished_at=now(),
                 )
             )
             await session.commit()
             if result.rowcount > 0:
-                import logging
-                logging.getLogger(__name__).warning(
+                logger.warning(
                     f"Cleaned up {result.rowcount} orphaned task(s) on startup"
                 )
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Failed to clean orphaned tasks: {e}")
+        logger.error(f"Failed to clean orphaned tasks: {e}")
     
     node_role = getattr(settings, "NODE_ROLE", "master")
     heartbeat_task = None
@@ -76,8 +88,31 @@ async def lifespan(app: FastAPI):
         shutdown_scheduler()
     await redis_manager.close_pool()
 
-app = FastAPI(title="SpiderManage API", lifespan=lifespan)
+app = FastAPI(title="SpiderManage API", lifespan=lifespan, redirect_slashes=False)
 bind_app(app)  # 注册全局请求异常处理器，将 500 错误写入 error.log
+
+def logging_metric():
+    """自定义指标：不仅交由 Prometheus 采集，还将响应时间直接写入 error.log（或其他 logger 配置的输出）"""
+    perf_logger = logger
+
+    def instrumentation(info: metrics.Info) -> None:
+        # info.modified_duration 即为接口消耗时间 (秒)
+        perf_logger.info(
+            f"API PERF: {info.request.method} {info.request.url.path} "
+            f"| Status: {info.response.status_code} "
+            f"| Time: {info.modified_duration:.4f}s"
+        )
+    return instrumentation
+
+instrumentator = Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=False,
+    should_instrument_requests_inprogress=True,
+    inprogress_name="inprogress",
+    inprogress_labels=True,
+)
+instrumentator.add(logging_metric())
+instrumentator.instrument(app).expose(app, endpoint="/metrics")
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,6 +132,7 @@ app.include_router(spiders_router, prefix="/api/spiders", tags=["爬虫管理"])
 app.include_router(tasks_router, prefix="/api/tasks", tags=["任务管理"])
 app.include_router(users_router, prefix="/api/users", tags=["用户"])
 app.include_router(dashboard_router, prefix="/api/dashboard", tags=["大盘"])
+app.include_router(admin_router, prefix="/api/admin", tags=["管理员"])
 
 # 独立注册 WebSocket 路由，避免 Router 前缀干扰
 from app.api.tasks.router import websocket_task_logs

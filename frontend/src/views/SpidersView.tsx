@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom';
 import { Bug, Plus, Play, Pencil, Trash2, X, Copy, Check, UploadCloud, GitBranch, Server, Loader2, ChevronDown, Code, History } from 'lucide-react';
 import CodeEditorModal from './CodeEditorModal';
 import TaskHistoryModal from './TaskHistoryModal';
+import DangerConfirmModal from '@/components/DangerConfirmModal';
+import PermissionGuard from '@/components/PermissionGuard';
 import {
     fetchSpiderList,
     createSpider,
@@ -577,7 +579,7 @@ function RunSpiderModal({ spider, nodes, onClose, showToast }: RunModalProps) {
                         <div className="sv-select-hint">
                             {selectedNodes.length === 0
                                 ? '未选节点，任务将进入公共队列由任意 Worker 竞争执行'
-                                : `已选 ${selectedNodes.length} 个节点`}
+                                : `已选节点：${selectedNodes.map(id => nodes.find(n => n.node_id === id)?.name || id).join('、')}`}
                         </div>
                     </div>
                 </div>
@@ -600,58 +602,7 @@ function RunSpiderModal({ spider, nodes, onClose, showToast }: RunModalProps) {
     );
 }
 
-// ─────────────────────────────────────────────────
-// 删除确认弹窗
-// ─────────────────────────────────────────────────
-interface DeleteModalProps {
-    spider: SpiderItem;
-    onClose: () => void;
-    onDeleted: () => void;
-    showToast: (msg: string, type?: ToastType) => void;
-}
 
-function DeleteModal({ spider, onClose, onDeleted, showToast }: DeleteModalProps) {
-    const [submitting, setSubmitting] = useState(false);
-
-    const handleDelete = async () => {
-        setSubmitting(true);
-        try {
-            const res = await deleteSpider(spider.id);
-            if (res.code === 200) {
-                showToast('爬虫已删除', 'success');
-                onDeleted();
-            } else {
-                showToast(res.message || '删除失败', 'error');
-            }
-        } catch {
-            showToast('请求异常', 'error');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    return (
-        <div className="sv-overlay" onClick={onClose}>
-            <div className="sv-modal glass-panel" onClick={e => e.stopPropagation()}>
-                <div className="sv-modal-header">
-                    <h3><Trash2 size={16} /> 确认删除</h3>
-                    <button className="sv-drawer-close" onClick={onClose}><X size={17} /></button>
-                </div>
-                <div className="sv-modal-body">
-                    <p className="sv-confirm-text">
-                        确定删除爬虫 <strong style={{ color: '#fff' }}>{spider.name}</strong> 吗？此操作不可撤销。
-                    </p>
-                </div>
-                <div className="sv-modal-footer">
-                    <button className="sv-btn sv-btn-ghost" onClick={onClose}>取消</button>
-                    <button className="sv-btn sv-btn-danger" onClick={handleDelete} disabled={submitting}>
-                        {submitting ? '删除中...' : '确认删除'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
 
 // ─────────────────────────────────────────────────
 // 主视图
@@ -765,9 +716,11 @@ export default function SpidersView() {
                     <span className="sv-count">{spiders.length} 个爬虫</span>
                 </div>
                 <div className="sv-toolbar-right">
-                    <button className="sv-btn sv-btn-primary" onClick={openCreate}>
-                        <Plus size={15} /> 新建爬虫
-                    </button>
+                    <PermissionGuard roles={['admin', 'developer']}>
+                        <button className="sv-btn sv-btn-primary" onClick={openCreate}>
+                            <Plus size={15} /> 新建爬虫
+                        </button>
+                    </PermissionGuard>
                 </div>
             </div>
 
@@ -844,20 +797,22 @@ export default function SpidersView() {
                                             >
                                                 <Play size={15} />
                                             </button>
-                                            <button
-                                                className="sv-btn-icon edit"
-                                                title="编辑"
-                                                onClick={e => openEdit(s, e)}
-                                            >
-                                                <Pencil size={14} />
-                                            </button>
-                                            <button
-                                                className="sv-btn-icon del"
-                                                title="删除"
-                                                onClick={e => openDelete(s, e)}
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
+                                            <PermissionGuard roles={['admin', 'developer']}>
+                                                <button
+                                                    className="sv-btn-icon edit"
+                                                    title="编辑"
+                                                    onClick={e => openEdit(s, e)}
+                                                >
+                                                    <Pencil size={14} />
+                                                </button>
+                                                <button
+                                                    className="sv-btn-icon del"
+                                                    title="删除"
+                                                    onClick={e => openDelete(s, e)}
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </PermissionGuard>
                                         </div>
                                     </td>
                                 </tr>
@@ -890,14 +845,27 @@ export default function SpidersView() {
             )}
 
             {/* 删除确认 */}
-            {deleteTarget && (
-                <DeleteModal
-                    spider={deleteTarget}
-                    onClose={() => setDeleteTarget(null)}
-                    onDeleted={() => { setDeleteTarget(null); loadSpiders(); }}
-                    showToast={showToast}
-                />
-            )}
+            <DangerConfirmModal
+                open={!!deleteTarget}
+                title="删除爬虫"
+                description={<>确定删除爬虫 <strong>{deleteTarget?.name}</strong> 吗？</>}
+                onCancel={() => setDeleteTarget(null)}
+                onConfirm={async () => {
+                    if (!deleteTarget) return;
+                    try {
+                        const res = await deleteSpider(deleteTarget.id);
+                        if (res.code === 200) {
+                            showToast('爬虫已删除', 'success');
+                            setDeleteTarget(null);
+                            loadSpiders();
+                        } else {
+                            showToast(res.message || '删除失败', 'error');
+                        }
+                    } catch {
+                        showToast('请求异常', 'error');
+                    }
+                }}
+            />
 
             {/* 代码编辑器 */}
             {codeTarget && (

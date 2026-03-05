@@ -269,11 +269,64 @@
     border-radius: 2px;
 }
 
+/* ── 树形目录节点 ── */
+.ce-tree-dir {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--text-secondary, #9ca3af);
+    transition: all 0.12s ease;
+    user-select: none;
+}
+
+.ce-tree-dir:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: #e5e7eb;
+}
+
+.ce-tree-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+
+.ce-tree-dir:hover .ce-tree-arrow {
+    opacity: 0.9;
+}
+
+.ce-tree-dir-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: #f59e0b;
+    opacity: 0.8;
+}
+
+.ce-tree-dir:hover .ce-tree-dir-icon {
+    opacity: 1;
+}
+
+.ce-tree-dir-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+/* ── 文件节点 ── */
 .ce-file-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 6px 12px;
     cursor: pointer;
     font-size: 0.82rem;
     color: var(--text-secondary, #9ca3af);

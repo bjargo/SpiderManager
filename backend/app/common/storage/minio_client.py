@@ -148,5 +148,30 @@ class MinioClientManager:
             logger.error(f"Unexpected error generating presigned url for {object_name}: {e}")
             raise RuntimeError(f"Unexpected Storage Error: {str(e)}") from e
 
+    def generate_presigned_url_for_container(self, object_name: str, expires_in_minutes: int = 15) -> str:
+        """
+        生成爬虫容器内能够下载的预签名 URL
+        即时创建一个针对 MINIO_CONTAINER_ENDPOINT 签发的临时客户端，解决 Host 不匹配导致 403 的问题
+        """
+        try:
+            container_client = Minio(
+                endpoint=settings.MINIO_CONTAINER_ENDPOINT,
+                access_key=settings.MINIO_ROOT_USER,
+                secret_key=settings.MINIO_ROOT_PASSWORD,
+                secure=False
+            )
+            url = container_client.presigned_get_object(
+                bucket_name=self.bucket_name,
+                object_name=object_name,
+                expires=timedelta(minutes=expires_in_minutes)
+            )
+            return url
+        except S3Error as e:
+            logger.error(f"MinIO storage error generating container presigned url for {object_name}: {e}")
+            raise RuntimeError(f"Storage Error: {str(e)}") from e
+        except Exception as e:
+            logger.error(f"Unexpected error generating container presigned url for {object_name}: {e}")
+            raise RuntimeError(f"Unexpected Storage Error: {str(e)}") from e
+
 # 导出单例管理器
 minio_manager = MinioClientManager()

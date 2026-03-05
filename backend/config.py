@@ -44,14 +44,26 @@ class Settings(BaseSettings):
     REDIS_SOCKET_TIMEOUT: float = 15.0
 
     # ── MINIO / 对象存储配置 ──
-    MINIO_ENDPOINT: str = "localhost:9000"
+    MINIO_ENDPOINT: str = "localhost:9000"          # 宿主机/后端访问 MinIO 的地址
     MINIO_ROOT_USER: str = "minioadmin"
     MINIO_ROOT_PASSWORD: str = "minioadmin"
     MINIO_BUCKET_NAME: str = "spidermanage-projects"
+    # 爬虫容器内访问 MinIO 的地址（容器内 localhost 指容器自身，不是宿主机）
+    # 开发模式(本地uvicorn)：设为 host.docker.internal:9000（Docker Desktop 宿主机别名）
+    # Docker Compose 生产模式：通过环境变量覆盖为 minio:9000（Docker 服务名）
+    MINIO_CONTAINER_ENDPOINT: str = "host.docker.internal:9000"
 
     # ── 安全配置 ──
     SECRET_KEY: str = "YOUR_SUPER_SECRET_KEY_HERE"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+
+    # ── 初始超级管理员配置 ──
+    FIRST_SUPERUSER_EMAIL: str = "admin@admin.com"
+    FIRST_SUPERUSER_PASSWORD: str = "admin"
+
+    # ── 时区配置 ──
+    # 所有节点的业务时间戳统一使用此时区，通过 docker-compose.yml 环境变量覆盖
+    TIMEZONE: str = "Asia/Shanghai"
 
     # ── 节点识别配置 ──
     NODE_ROLE: str = "master"  # 可选: master, worker

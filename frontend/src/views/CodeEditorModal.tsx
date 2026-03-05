@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Save, FileCode, Loader2, FolderOpen, Plus, Trash2, Check } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { X, Save, FileCode, Loader2, FolderOpen, Folder, Plus, Trash2, Check, ChevronRight, ChevronDown } from 'lucide-react';
 import { fetchSpiderFiles, fetchSpiderFileContent, saveSpiderFileContent, createSpiderFile, deleteSpiderFile } from '@/api/spider';
 import type { SpiderItem } from '@/types/spider';
 
@@ -18,6 +18,13 @@ import './CodeEditorModal.css';
 
 // ── 类型 ──
 type ToastType = 'success' | 'error';
+
+interface TreeNode {
+    name: string;           // 显示名称（文件名或目录名）
+    fullPath: string;       // 完整路径
+    isDir: boolean;
+    children: TreeNode[];   // 子节点（仅目录有）
+}
 
 interface CodeEditorModalProps {
     spider: SpiderItem;
@@ -62,6 +69,152 @@ function getLanguageLabel(filename: string): string {
     return labels[ext] ?? 'Plain Text';
 }
 
+/** 将扁平文件路径数组构建为树形结构 */
+function buildFileTree(paths: string[]): TreeNode[] {
+    const root: TreeNode[] = [];
+
+    for (const filePath of paths) {
+        const parts = filePath.split('/');
+        let currentLevel = root;
+
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            const isLast = i === parts.length - 1;
+            const currentPath = parts.slice(0, i + 1).join('/');
+
+            let existing = currentLevel.find(n => n.name === part && n.isDir === !isLast);
+            if (!existing) {
+                existing = {
+                    name: part,
+                    fullPath: currentPath,
+                    isDir: !isLast,
+                    children: [],
+                };
+                currentLevel.push(existing);
+            }
+            currentLevel = existing.children;
+        }
+    }
+
+    // 排序：目录在前，文件在后；同类按名称排序
+    const sortNodes = (nodes: TreeNode[]): TreeNode[] => {
+        nodes.sort((a, b) => {
+            if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+            return a.name.localeCompare(b.name);
+        });
+        nodes.forEach(n => { if (n.isDir) sortNodes(n.children); });
+        return nodes;
+    };
+
+    return sortNodes(root);
+}
+
+// ── 树节点组件 ──
+interface FileTreeNodeProps {
+    node: TreeNode;
+    depth: number;
+    selectedFile: string | null;
+    expandedDirs: Set<string>;
+    deletingFile: string | null;
+    deleteLoading: boolean;
+    onFileClick: (path: string) => void;
+    onToggleDir: (path: string) => void;
+    onStartDelete: (path: string) => void;
+    onConfirmDelete: (path: string) => void;
+    onCancelDelete: () => void;
+}
+
+function FileTreeNode({
+    node, depth, selectedFile, expandedDirs, deletingFile, deleteLoading,
+    onFileClick, onToggleDir, onStartDelete, onConfirmDelete, onCancelDelete,
+}: FileTreeNodeProps) {
+    const paddingLeft = 12 + depth * 16;
+
+    if (node.isDir) {
+        const isExpanded = expandedDirs.has(node.fullPath);
+        return (
+            <>
+                <div
+                    className="ce-tree-dir"
+                    style={{ paddingLeft }}
+                    onClick={() => onToggleDir(node.fullPath)}
+                    title={node.fullPath}
+                >
+                    <span className="ce-tree-arrow">
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
+                    <span className="ce-tree-dir-icon">
+                        {isExpanded ? <FolderOpen size={14} /> : <Folder size={14} />}
+                    </span>
+                    <span className="ce-tree-dir-name">{node.name}</span>
+                </div>
+                {isExpanded && node.children.map(child => (
+                    <FileTreeNode
+                        key={child.fullPath}
+                        node={child}
+                        depth={depth + 1}
+                        selectedFile={selectedFile}
+                        expandedDirs={expandedDirs}
+                        deletingFile={deletingFile}
+                        deleteLoading={deleteLoading}
+                        onFileClick={onFileClick}
+                        onToggleDir={onToggleDir}
+                        onStartDelete={onStartDelete}
+                        onConfirmDelete={onConfirmDelete}
+                        onCancelDelete={onCancelDelete}
+                    />
+                ))}
+            </>
+        );
+    }
+
+    // 文件节点
+    return (
+        <div
+            className={`ce-file-item ${selectedFile === node.fullPath ? 'active' : ''}`}
+            style={{ paddingLeft }}
+            onClick={() => onFileClick(node.fullPath)}
+            title={node.fullPath}
+        >
+            <span className="file-icon">{getFileIcon(node.name)}</span>
+            <span className="ce-file-name">{node.name}</span>
+
+            {/* 删除确认 */}
+            {deletingFile === node.fullPath ? (
+                <span className="ce-file-delete-confirm" onClick={e => e.stopPropagation()}>
+                    <button
+                        className="ce-file-delete-yes"
+                        onClick={() => onConfirmDelete(node.fullPath)}
+                        disabled={deleteLoading}
+                        title="确认删除"
+                    >
+                        {deleteLoading
+                            ? <Loader2 size={11} className="spin" />
+                            : <Check size={11} />
+                        }
+                    </button>
+                    <button
+                        className="ce-file-delete-no"
+                        onClick={() => onCancelDelete()}
+                        disabled={deleteLoading}
+                        title="取消"
+                    >
+                        <X size={11} />
+                    </button>
+                </span>
+            ) : (
+                <button
+                    className="ce-file-delete-btn"
+                    onClick={e => { e.stopPropagation(); onStartDelete(node.fullPath); }}
+                    title="删除文件"
+                >
+                    <Trash2 size={12} />
+                </button>
+            )}
+        </div>
+    );
+}
+
 // ── 主组件 ──
 export default function CodeEditorModal({ spider, onClose, showToast }: CodeEditorModalProps) {
     const [files, setFiles] = useState<string[]>([]);
@@ -82,10 +235,43 @@ export default function CodeEditorModal({ spider, onClose, showToast }: CodeEdit
     const [deletingFile, setDeletingFile] = useState<string | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
 
+    // 目录展开状态
+    const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+
     const editorRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
 
     const isModified = fileContent !== originalContent;
+
+    // 构建文件树
+    const fileTree = useMemo(() => buildFileTree(files), [files]);
+
+    // 默认展开所有目录
+    useEffect(() => {
+        const allDirs = new Set<string>();
+        const collectDirs = (nodes: TreeNode[]) => {
+            for (const n of nodes) {
+                if (n.isDir) {
+                    allDirs.add(n.fullPath);
+                    collectDirs(n.children);
+                }
+            }
+        };
+        collectDirs(fileTree);
+        setExpandedDirs(allDirs);
+    }, [fileTree]);
+
+    const toggleDir = (dirPath: string) => {
+        setExpandedDirs(prev => {
+            const next = new Set(prev);
+            if (next.has(dirPath)) {
+                next.delete(dirPath);
+            } else {
+                next.add(dirPath);
+            }
+            return next;
+        });
+    };
 
     // ── 加载文件列表 ──
     useEffect(() => {
@@ -344,7 +530,7 @@ export default function CodeEditorModal({ spider, onClose, showToast }: CodeEdit
                                         <input
                                             ref={newFileInputRef}
                                             className="ce-file-create-input"
-                                            placeholder="输入文件名，如 utils.py"
+                                            placeholder="输入路径，如 utils/helper.py"
                                             value={newFileName}
                                             onChange={e => setNewFileName(e.target.value)}
                                             onKeyDown={handleCreateKeyDown}
@@ -372,51 +558,22 @@ export default function CodeEditorModal({ spider, onClose, showToast }: CodeEdit
                                     </div>
                                 )}
 
-                                {files.map(f => (
-                                    <div
-                                        key={f}
-                                        className={`ce-file-item ${selectedFile === f ? 'active' : ''}`}
-                                        onClick={() => handleFileClick(f)}
-                                        title={f}
-                                    >
-                                        <span className="file-icon">{getFileIcon(f)}</span>
-                                        <span className="ce-file-name">
-                                            {f.includes('/') ? f.split('/').pop() : f}
-                                        </span>
-
-                                        {/* 删除确认 */}
-                                        {deletingFile === f ? (
-                                            <span className="ce-file-delete-confirm" onClick={e => e.stopPropagation()}>
-                                                <button
-                                                    className="ce-file-delete-yes"
-                                                    onClick={() => handleDeleteFile(f)}
-                                                    disabled={deleteLoading}
-                                                    title="确认删除"
-                                                >
-                                                    {deleteLoading
-                                                        ? <Loader2 size={11} className="spin" />
-                                                        : <Check size={11} />
-                                                    }
-                                                </button>
-                                                <button
-                                                    className="ce-file-delete-no"
-                                                    onClick={() => setDeletingFile(null)}
-                                                    disabled={deleteLoading}
-                                                    title="取消"
-                                                >
-                                                    <X size={11} />
-                                                </button>
-                                            </span>
-                                        ) : (
-                                            <button
-                                                className="ce-file-delete-btn"
-                                                onClick={e => { e.stopPropagation(); setDeletingFile(f); }}
-                                                title="删除文件"
-                                            >
-                                                <Trash2 size={12} />
-                                            </button>
-                                        )}
-                                    </div>
+                                {/* 树形文件列表 */}
+                                {fileTree.map(node => (
+                                    <FileTreeNode
+                                        key={node.fullPath}
+                                        node={node}
+                                        depth={0}
+                                        selectedFile={selectedFile}
+                                        expandedDirs={expandedDirs}
+                                        deletingFile={deletingFile}
+                                        deleteLoading={deleteLoading}
+                                        onFileClick={handleFileClick}
+                                        onToggleDir={toggleDir}
+                                        onStartDelete={setDeletingFile}
+                                        onConfirmDelete={handleDeleteFile}
+                                        onCancelDelete={() => setDeletingFile(null)}
+                                    />
                                 ))}
                             </div>
                         )}

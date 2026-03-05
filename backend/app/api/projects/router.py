@@ -6,6 +6,8 @@ import logging
 from typing import List
 from datetime import datetime
 
+from app.common.timezone import now
+
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,15 +15,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.projects.models import Project
 from app.api.projects.schemas import ProjectCreate, ProjectUpdate, ProjectOut
 from app.api.spiders.models import Spider
+from app.api.users.models import User
 from app.common.schemas.api_response import ApiResponse
 from app.db.database import get_async_session
+from app.common.dependencies import require_developer, require_viewer, verify_resource_owner
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
 @router.get("", response_model=ApiResponse[List[ProjectOut]], summary="获取所有项目")
-async def list_projects(session: AsyncSession = Depends(get_async_session)):
+async def list_projects(
+    session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_viewer),
+):
     result_projects = await session.execute(select(Project).order_by(Project.id.desc()))
     projects = result_projects.scalars().all()
 
@@ -43,9 +50,18 @@ async def list_projects(session: AsyncSession = Depends(get_async_session)):
 
 
 @router.post("", response_model=ApiResponse[ProjectOut], summary="创建项目")
-async def create_project(body: ProjectCreate, session: AsyncSession = Depends(get_async_session)):
+async def create_project(
+    body: ProjectCreate,
+    session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_developer),
+):
     project_id = f"proj-{uuid.uuid4().hex[:8]}"
-    db_project = Project(project_id=project_id, name=body.name, description=body.description)
+    db_project = Project(
+        project_id=project_id,
+        name=body.name,
+        description=body.description,
+        owner_id=operator.id,
+    )
     session.add(db_project)
     await session.commit()
     await session.refresh(db_project)
@@ -62,17 +78,24 @@ async def create_project(body: ProjectCreate, session: AsyncSession = Depends(ge
 
 
 @router.post("/{project_id}/update", response_model=ApiResponse[ProjectOut], summary="修改项目")
-async def update_project(project_id: str, body: ProjectUpdate, session: AsyncSession = Depends(get_async_session)):
+async def update_project(
+    project_id: str,
+    body: ProjectUpdate,
+    session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_developer),
+):
     result = await session.execute(select(Project).where(Project.project_id == project_id))
     db_project = result.scalars().first()
     if not db_project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+        
+    verify_resource_owner(db_project.owner_id, operator, resource_name="项目")
 
     if body.name is not None:
         db_project.name = body.name
     if body.description is not None:
         db_project.description = body.description
-    db_project.updated_at = datetime.utcnow()
+    db_project.updated_at = now()
 
     session.add(db_project)
     await session.commit()
@@ -95,11 +118,17 @@ async def update_project(project_id: str, body: ProjectUpdate, session: AsyncSes
 
 
 @router.post("/{project_id}/delete", response_model=ApiResponse, summary="删除项目")
-async def delete_project(project_id: str, session: AsyncSession = Depends(get_async_session)):
+async def delete_project(
+    project_id: str,
+    session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_developer),
+):
     result = await session.execute(select(Project).where(Project.project_id == project_id))
     db_project = result.scalars().first()
     if not db_project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+        
+    verify_resource_owner(db_project.owner_id, operator, resource_name="项目")
 
     spiders_result = await session.execute(select(Spider).where(Spider.project_id == project_id))
     spiders = spiders_result.scalars().all()

@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
     Activity, Play, CalendarClock, Settings, LayoutDashboard,
-    FolderKanban, LogOut, PanelLeftClose, PanelLeftOpen, Sun, Moon, PackageOpen
+    FolderKanban, LogOut, PanelLeftClose, PanelLeftOpen, Sun, Moon, PackageOpen, ShieldCheck, Users
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useAuth, clearAuthCache } from '@/hooks/useAuth';
 import './Layout.css';
 
 export default function Layout() {
@@ -34,7 +35,10 @@ export default function Layout() {
         }
     }, [isDark]);
 
+    const { user, isAdmin } = useAuth();
+
     const handleLogout = () => {
+        clearAuthCache();
         localStorage.removeItem('token');
         navigate('/login', { replace: true });
     };
@@ -46,6 +50,11 @@ export default function Layout() {
         { name: '爬虫管理', path: '/spiders', icon: <FolderKanban size={20} /> },
         { name: '任务列表', path: '/tasks', icon: <Play size={20} /> },
         { name: '定时调度', path: '/schedules', icon: <CalendarClock size={20} /> },
+        // 审计日志 & 用户管理：仅 admin 可见
+        ...(isAdmin ? [
+            { name: '审计日志', path: '/audit-logs', icon: <ShieldCheck size={20} /> },
+            { name: '用户管理', path: '/users', icon: <Users size={20} /> },
+        ] : []),
     ];
 
     // Simple Breadcrumb logic
@@ -112,8 +121,19 @@ export default function Layout() {
                         </button>
 
                         <div className="user-profile">
-                            <div className="avatar">A</div>
-                            <span className="username">Admin</span>
+                            <div className="avatar">
+                                {user?.email?.[0]?.toUpperCase() ?? 'U'}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
+                                <span className="username" title={user?.email}>
+                                    {user?.email ?? '加载中...'}
+                                </span>
+                                {user?.role && (
+                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted, #64748b)', letterSpacing: '0.05em' }}>
+                                        {user.role.toUpperCase()}
+                                    </span>
+                                )}
+                            </div>
                             <button className="logout-btn" onClick={handleLogout} title="退出登录">
                                 <LogOut size={18} />
                             </button>

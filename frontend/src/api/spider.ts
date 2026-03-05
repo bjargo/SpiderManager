@@ -13,12 +13,12 @@ import type {
 
 /** 获取爬虫列表 */
 export const fetchSpiderList = (): Promise<ApiResponse<SpiderItem[]>> => {
-    return request.get('/spiders/');
+    return request.get('/spiders');
 };
 
 /** 创建爬虫（通用，source_type 由调用方指定） */
 export const createSpider = (data: SpiderCreatePayload): Promise<ApiResponse<SpiderItem>> => {
-    return request.post('/spiders/', data);
+    return request.post('/spiders', data);
 };
 
 /** 上传 ZIP 并获取 MinIO source_url */

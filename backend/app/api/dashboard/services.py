@@ -1,18 +1,23 @@
 import json
 from datetime import datetime, timedelta
+from app.common.timezone import now as now_tz
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from redis.asyncio import Redis
-
-from app.api.projects.models import Project
+from app.api.spiders.models import Spider
+from app.api.tasks.models import SpiderTask
 from .schemas import DashboardStats, TrendData, RecentTask
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class DashboardService:
     @staticmethod
     async def get_stats(redis: Redis, session: AsyncSession) -> DashboardStats:
-        # 1. Total Spiders (Projects)
-        result = await session.execute(select(func.count()).select_from(Project))
+        # 1. Total Spiders
+        result = await session.execute(select(func.count()).select_from(Spider))
         total_spiders = result.scalar() or 0
 
         # 2. Nodes
@@ -33,38 +38,31 @@ class DashboardService:
                             total_nodes += 1
                             if data.get("status", "online") == "online":
                                 online_nodes += 1
-                        except:
-                            pass
+                        except Exception as e:
+                            logger.error(f"Error parsing node status data: {e}", exc_info=True)
             if int(cursor) == 0:
                 break
                 
         # 3. Tasks today
-        now = datetime.now()
-        today_start = datetime(now.year, now.month, now.day).timestamp()
+        now = now_tz()
+        today_start = datetime(now.year, now.month, now.day)
         
-        cursor = 0
-        task_pattern = "task:status:*"
-        tasks_today = 0
-        failed_tasks_today = 0
-        
-        while True:
-            cursor, keys = await redis.scan(cursor=cursor, match=task_pattern, count=100)
-            if keys:
-                values = await redis.mget(keys)
-                for val in values:
-                    if val:
-                        try:
-                            data = json.loads(val.decode("utf-8") if isinstance(val, bytes) else val)
-                            start_time = data.get("start_time")
-                            
-                            if start_time and start_time >= today_start:
-                                tasks_today += 1
-                                if data.get("status") == "failed":
-                                    failed_tasks_today += 1
-                        except:
-                            pass
-            if int(cursor) == 0:
-                break
+        # 今日任务总数
+        tasks_today_query = select(func.count()).select_from(SpiderTask).where(
+            SpiderTask.created_at >= today_start
+        )
+        tasks_today_result = await session.execute(tasks_today_query)
+        tasks_today = tasks_today_result.scalar() or 0
+
+        # 今日失败任务
+        failed_tasks_today_query = select(func.count()).select_from(SpiderTask).where(
+            and_(
+                SpiderTask.created_at >= today_start,
+                SpiderTask.status.in_(["failed", "timeout", "error"])
+            )
+        )
+        failed_tasks_today_result = await session.execute(failed_tasks_today_query)
+        failed_tasks_today = failed_tasks_today_result.scalar() or 0
 
         return DashboardStats(
             onlineNodes=online_nodes,
@@ -75,10 +73,11 @@ class DashboardService:
         )
 
     @staticmethod
-    async def get_trends(redis: Redis) -> List[TrendData]:
+    async def get_trends(redis: Redis, session: AsyncSession) -> List[TrendData]:
         # Last 7 days
-        now = datetime.now()
+        now = now_tz()
         today = datetime(now.year, now.month, now.day)
+        last_7_days_start = today - timedelta(days=6)
         
         days_map = {}
         ordered_days = []
@@ -88,31 +87,23 @@ class DashboardService:
             days_map[d.date()] = {"success": 0, "failure": 0, "date_str": date_str}
             ordered_days.append(d.date())
             
-        cursor = 0
-        task_pattern = "task:status:*"
+        # 查询最近 7 天的记录
+        query = select(SpiderTask.status, SpiderTask.created_at).where(
+            SpiderTask.created_at >= last_7_days_start
+        )
+        result = await session.execute(query)
+        tasks = result.all()
         
-        while True:
-            cursor, keys = await redis.scan(cursor=cursor, match=task_pattern, count=500)
-            if keys:
-                values = await redis.mget(keys)
-                for val in values:
-                    if val:
-                        try:
-                            data = json.loads(val.decode("utf-8") if isinstance(val, bytes) else val)
-                            start_time = data.get("start_time")
-                            status = data.get("status")
-                            if start_time and status in ["success", "failed"]:
-                                task_date = datetime.fromtimestamp(start_time).date()
-                                if task_date in days_map:
-                                    if status == "success":
-                                        days_map[task_date]["success"] += 1
-                                    elif status == "failed":
-                                        days_map[task_date]["failure"] += 1
-                        except:
-                            pass
-            if int(cursor) == 0:
-                break
-                
+        for task_status, created_at in tasks:
+            if not created_at:
+                continue
+            task_date = created_at.date()
+            if task_date in days_map:
+                if task_status == "success":
+                    days_map[task_date]["success"] += 1
+                elif task_status in ["failed", "timeout", "error"]:
+                    days_map[task_date]["failure"] += 1
+                    
         return [
             TrendData(
                 date=days_map[d]["date_str"], 
@@ -124,55 +115,25 @@ class DashboardService:
 
     @staticmethod
     async def get_recent_tasks(redis: Redis, session: AsyncSession) -> List[RecentTask]:
-        cursor = 0
-        task_pattern = "task:status:*"
-        all_tasks = []
-        
-        while True:
-            cursor, keys = await redis.scan(cursor=cursor, match=task_pattern, count=500)
-            if keys:
-                values = await redis.mget(keys)
-                for val in values:
-                    if val:
-                        try:
-                            data = json.loads(val.decode("utf-8") if isinstance(val, bytes) else val)
-                            if "start_time" in data:
-                                all_tasks.append(data)
-                        except:
-                            continue
-            if int(cursor) == 0:
-                break
-                
-        # Sort by start_time descending
-        all_tasks.sort(key=lambda x: x.get("start_time", 0), reverse=True)
-        recent_5 = all_tasks[:5]
-        
-        # Optionally, map project_ids to project names if we want to be perfect
-        project_ids = [t.get("project_id") for t in recent_5 if t.get("project_id")]
-        project_name_map = {}
-        if project_ids:
-            result = await session.execute(select(Project).where(Project.project_id.in_(project_ids)))
-            for proj in result.scalars():
-                project_name_map[proj.project_id] = proj.name
+        # 查询最近的 5 个任务
+        query = select(SpiderTask).order_by(SpiderTask.created_at.desc()).limit(5)
+        result = await session.execute(query)
+        recent_tasks = result.scalars().all()
         
         result_list = []
-        for t in recent_5:
-            start_ts = t.get("start_time")
-            end_ts = t.get("end_time")
-            start_str = datetime.fromtimestamp(start_ts).strftime("%Y-%m-%d %H:%M:%S") if start_ts else ""
-            end_str = datetime.fromtimestamp(end_ts).strftime("%Y-%m-%d %H:%M:%S") if end_ts else None
+        for t in recent_tasks:
+            start_str = t.started_at.strftime("%Y-%m-%d %H:%M:%S") if t.started_at else t.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            end_str = t.finished_at.strftime("%Y-%m-%d %H:%M:%S") if t.finished_at else None
             
-            p_id = t.get("project_id", "unknown_project")
-            spider_name = project_name_map.get(p_id, p_id)
-            
-            node_id = t.get("node_id") or t.get("node_target") or "public"
+            node_id = t.node_id or "public"
             node_name = f"Node-{node_id[:6]}" if node_id != "public" else "Public Queue"
             
             result_list.append(RecentTask(
-                id=t.get("task_id", "unknown"),
-                spiderName=spider_name,
+                id=t.task_id,
+                spiderId=t.spider_id,
+                spiderName=t.spider_name,
                 nodeName=node_name,
-                status=t.get("status", "running"),
+                status=t.status,
                 startTime=start_str,
                 endTime=end_str
             ))

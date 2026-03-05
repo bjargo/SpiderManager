@@ -5,9 +5,13 @@ export interface LogItem {
     text: string;
 }
 
-export function useLogSocket(taskId: string | null) {
+interface UseLogSocketOptions {
+    onStreamEnd?: () => void;
+}
+
+export function useLogSocket(taskId: string | null, options?: UseLogSocketOptions) {
     const [logs, setLogs] = useState<LogItem[]>([]);
-    const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'error' | 'closed'>('idle');
+    const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'error' | 'closed' | 'stream_ended'>('idle');
     const wsRef = useRef<WebSocket | null>(null);
 
     useEffect(() => {
@@ -40,6 +44,14 @@ export function useLogSocket(taskId: string | null) {
 
             ws.onmessage = (event) => {
                 if (!isMounted) return;
+                // 检测流结束哨兵：不追加到日志，触发回调通知组件切换到历史模式
+                if (event.data === '[STREAM_END]') {
+                    console.log(`[WS] Stream ended for task ${taskId}`);
+                    if (isMounted) setStatus('stream_ended');
+                    ws.close();
+                    options?.onStreamEnd?.();
+                    return;
+                }
                 setLogs(prev => {
                     const updated = [...prev, {
                         id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(),
@@ -60,10 +72,13 @@ export function useLogSocket(taskId: string | null) {
             ws.onclose = (event) => {
                 console.warn(`[WS] Connection closed for ${taskId}, code: ${event.code}`);
                 if (isMounted) {
-                    setStatus('closed');
-                    // 仅在曾经成功连接后才自动重连（避免无效重试）
-                    if (wasConnected) {
-                        reconnectTimer = setTimeout(connect, 3000);
+                    // stream_ended 是正常关闭，不需要重连也不覆盖状态
+                    if (status !== 'stream_ended') {
+                        setStatus('closed');
+                        // 仅在曾经成功连接后才自动重连（避免无效重试）
+                        if (wasConnected) {
+                            reconnectTimer = setTimeout(connect, 3000);
+                        }
                     }
                 }
             };

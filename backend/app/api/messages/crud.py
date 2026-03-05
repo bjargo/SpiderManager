@@ -1,6 +1,7 @@
 from sqlmodel import Session, select
 from typing import List, Optional
 from datetime import datetime
+from app.common.timezone import now
 from . import models, schemas
 
 class MessagesCRUD:
@@ -56,7 +57,7 @@ class MessagesCRUD:
         if db_message:
             db_message.is_read = status_update.is_read
             if status_update.is_read and not db_message.read_at:
-                db_message.read_at = datetime.utcnow()
+                db_message.read_at = now()
             db.add(db_message)
             db.commit()
             db.refresh(db_message)

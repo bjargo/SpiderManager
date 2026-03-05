@@ -1,6 +1,8 @@
 import json
 import logging
 from datetime import datetime
+
+from app.common.timezone import now as now_tz
 from typing import List
 
 from fastapi import APIRouter, Depends
@@ -10,12 +12,17 @@ from redis.exceptions import RedisError
 from app.common.redis import get_redis
 from app.api.nodes.schemas import NodeStatus, NodeConfigUpdate
 from app.common.schemas.api_response import ApiResponse
+from app.api.users.models import User
+from app.common.dependencies import require_viewer, require_developer, require_admin
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.get("", response_model=ApiResponse[List[NodeStatus]], summary="获取所有活跃节点的负载状态")
-async def get_nodes(redis: Redis = Depends(get_redis)):
+async def get_nodes(
+    redis: Redis = Depends(get_redis),
+    operator: User = Depends(require_viewer),
+):
     """
     监控所有 Worker 节点的活跃状态和系统负载。
     通过使用 SCAN 命令扫描 `node:status:*`，解析并返回节点列表。
@@ -72,7 +79,7 @@ async def get_nodes(redis: Redis = Depends(get_redis)):
                                 disk_usage=data.get("disk_usage", 0.0),
                                 memory_total_mb=data.get("memory_total_mb", 0),
                                 memory_used_mb=data.get("memory_used_mb", 0),
-                                last_heartbeat=data.get("timestamp", datetime.now().isoformat()),
+                                last_heartbeat=data.get("timestamp", now_tz().isoformat()),
                                 status="online",
                                 mac_address=c_data.get("mac_address", ""),
                                 enabled=is_enabled,
@@ -97,7 +104,12 @@ async def get_nodes(redis: Redis = Depends(get_redis)):
     return ApiResponse.success(data=nodes)
 
 @router.post("/{node_id}/config", response_model=ApiResponse)
-async def update_node_config(node_id: str, body: NodeConfigUpdate, redis: Redis = Depends(get_redis)):
+async def update_node_config(
+    node_id: str,
+    body: NodeConfigUpdate,
+    redis: Redis = Depends(get_redis),
+    operator: User = Depends(require_admin),
+):
     """修改节点配置字典并持久化到 Redis Hash (遵循只用 POST 原则)"""
     config_key = f"node:config:{node_id}"
     
@@ -116,7 +128,11 @@ async def update_node_config(node_id: str, body: NodeConfigUpdate, redis: Redis 
         return ApiResponse.error(code=500, message="保存节点配置失败 (Redis异常)")
 
 @router.post("/{node_id}/delete", response_model=ApiResponse)
-async def uninstall_node(node_id: str, redis: Redis = Depends(get_redis)):
+async def uninstall_node(
+    node_id: str,
+    redis: Redis = Depends(get_redis),
+    operator: User = Depends(require_admin),
+):
     """卸载删除节点，清除相关的状态信息和持久化配置 (遵循只用 POST 原则)"""
     status_key = f"node:status:{node_id}"
     config_key = f"node:config:{node_id}"

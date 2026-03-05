@@ -10,7 +10,7 @@ export const runTask = (data: TaskRequest) => {
 };
 
 export const fetchTaskList = (params?: TaskListParams): Promise<ApiResponse<TaskListResponse>> => {
-    return request.get('/tasks/', { params });
+    return request.get('/tasks', { params });
 };
 
 export const stopTask = (taskId: string): Promise<ApiResponse<any>> => {

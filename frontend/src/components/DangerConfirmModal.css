@@ -1,0 +1,199 @@
+/* ── 遮罩层 ── */
+.dcm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: dcm-fade-in 0.15s ease;
+}
+
+@keyframes dcm-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* ── 弹窗主体 ── */
+.dcm-modal {
+    width: 420px;
+    max-width: 92vw;
+    background: #1a1d24;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(239, 68, 68, 0.15);
+    animation: dcm-slide-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes dcm-slide-in {
+    from {
+        transform: scale(0.92) translateY(-10px);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+/* ── 顶部红色警告色条 ── */
+.dcm-danger-strip {
+    height: 4px;
+    background: linear-gradient(90deg, #dc2626, #ef4444, #f87171);
+}
+
+.dcm-content {
+    padding: 20px 24px 22px;
+}
+
+/* ── 标题行 ── */
+.dcm-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.dcm-icon-wrap {
+    width: 36px;
+    height: 36px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dcm-icon {
+    color: #ef4444;
+}
+
+.dcm-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #f8fafc;
+    flex: 1;
+}
+
+.dcm-close {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s, background 0.15s;
+}
+
+.dcm-close:hover {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── 正文 ── */
+.dcm-body {
+    margin-bottom: 22px;
+}
+
+.dcm-description {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    line-height: 1.6;
+    margin: 0 0 12px;
+}
+
+.dcm-description strong {
+    color: #f8fafc;
+}
+
+.dcm-warning-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    color: #f87171;
+}
+
+/* ── 按钮行 ── */
+.dcm-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.dcm-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+}
+
+.dcm-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.dcm-btn-cancel {
+    background: rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dcm-btn-cancel:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f8fafc;
+}
+
+.dcm-btn-danger {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+}
+
+.dcm-btn-danger:hover:not(:disabled) {
+    background: linear-gradient(135deg, #b91c1c, #dc2626);
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.5);
+    transform: translateY(-1px);
+}
+
+.dcm-btn-danger:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+/* ── 旋转动画 ── */
+.dcm-spin {
+    animation: dcm-rotate 0.8s linear infinite;
+}
+
+@keyframes dcm-rotate {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}

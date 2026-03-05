@@ -2,7 +2,10 @@ import json
 import logging
 import uuid
 from typing import Optional, List
-
+from app.db.database import async_session_maker
+from app.api.spiders.models import Spider
+from app.api.tasks.models import SpiderTask
+from sqlalchemy import select
 from config import settings
 from app.common.redis import redis_manager
 
@@ -19,9 +22,6 @@ async def dispatch_scheduled_task(
     供 APScheduler 触发调用的任务分发逻辑。
     通过 spider_id 查询 Spider 信息（language、source_url 等），构建 payload 后入列。
     """
-    from app.db.database import async_session_maker
-    from app.api.spiders.models import Spider
-    from sqlalchemy import select
 
     task_id = f"cron-{uuid.uuid4().hex[:8]}"
 
@@ -57,6 +57,20 @@ async def dispatch_scheduled_task(
                 queues.append(f"{settings.NODE_QUEUE_PREFIX}{node_id}")
         else:
             queues.append(settings.PUBLIC_QUEUE_KEY)
+            
+        async with async_session_maker() as session:
+            for target_queue in queues:
+                node_identifier = target_queue.split(":")[-1] if target_queue != settings.PUBLIC_QUEUE_KEY else "public"
+                new_task = SpiderTask(
+                    task_id=task_id,
+                    spider_id=spider_id,
+                    spider_name=spider.name,
+                    command=spider.command or "main.py",
+                    status="pending",
+                    node_id=node_identifier if node_identifier != "public" else None
+                )
+                session.add(new_task)
+            await session.commit()
 
         for target_queue in queues:
             await redis_manager.client.lpush(target_queue, task_data)

@@ -9,6 +9,7 @@ from redis.exceptions import RedisError, ConnectionError, TimeoutError
 import json
 
 from app.common.redis import redis_manager
+from app.common.timezone import now
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ async def get_system_stats() -> Dict[str, Any]:
         "memory_total_mb": mem.total // (1024 * 1024),
         "memory_used_mb": mem.used // (1024 * 1024),
         "disk_usage": disk.percent,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": now().isoformat()
     }
 
 async def send_heartbeat() -> None:

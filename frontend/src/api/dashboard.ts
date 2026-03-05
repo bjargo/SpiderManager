@@ -17,6 +17,7 @@ export interface TrendData {
 
 export interface RecentTask {
     id: string;
+    spiderId?: number;
     spiderName: string;
     nodeName: string;
     status: 'success' | 'failed' | 'running';

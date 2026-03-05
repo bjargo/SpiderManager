@@ -1,0 +1,282 @@
+.al-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+    min-height: 100vh;
+}
+
+/* ── 工具栏 ── */
+.al-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-radius: 12px;
+}
+
+.al-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-primary, #f8fafc);
+}
+
+.al-toolbar-left h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.al-readonly-badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+}
+
+/* ── 筛选栏 ── */
+.al-filter {
+    padding: 16px 20px;
+    border-radius: 12px;
+}
+
+.al-filter-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.al-filter-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.al-filter-item label {
+    font-size: 0.78rem;
+    color: var(--text-secondary, #94a3b8);
+    font-weight: 500;
+}
+
+.al-filter-item input {
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary, #f8fafc);
+    font-size: 0.84rem;
+    outline: none;
+    transition: border-color 0.15s;
+    color-scheme: dark;
+}
+
+.al-filter-item input:focus {
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.al-filter-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* ── 按钮 ── */
+.al-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+}
+
+.al-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.al-btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #fff;
+}
+
+.al-btn-primary:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.al-btn-ghost {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary, #94a3b8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.al-btn-ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary, #f8fafc);
+}
+
+/* ── 表格 ── */
+.al-table-wrap {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.al-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+}
+
+.al-table thead th {
+    padding: 12px 14px;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary, #94a3b8);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.02);
+    letter-spacing: 0.05em;
+}
+
+.al-table tbody tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    transition: background 0.12s;
+}
+
+.al-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.al-table tbody td {
+    padding: 10px 14px;
+    color: var(--text-primary, #f8fafc);
+    vertical-align: middle;
+}
+
+.al-id {
+    color: var(--text-secondary, #64748b);
+    font-family: monospace;
+}
+
+.al-mono {
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+}
+
+.al-time {
+    color: var(--text-secondary, #64748b);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.al-resource-type {
+    color: #a78bfa;
+    font-size: 0.82rem;
+}
+
+.al-truncate {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── 角色标签 ── */
+.al-role {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+}
+
+.al-role-admin {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.al-role-developer {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.al-role-viewer {
+    background: rgba(100, 116, 139, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+/* ── 操作 badge ── */
+.al-badge {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid;
+    font-weight: 600;
+    font-family: monospace;
+    letter-spacing: 0.04em;
+}
+
+/* ── 空状态 ── */
+.al-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 0;
+    gap: 14px;
+    color: var(--text-secondary, #64748b);
+}
+
+.al-empty p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+/* ── 加载更多 ── */
+.al-load-more {
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── 自旋 ── */
+.al-spin {
+    animation: al-rotate 0.8s linear infinite;
+}
+
+@keyframes al-rotate {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ── 只读提示条 ── */
+.al-readonly-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.07);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    font-size: 0.82rem;
+}

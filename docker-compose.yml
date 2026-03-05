@@ -66,6 +66,8 @@ x-common-env:
   # Master 上传爬虫代码 ZIP 到 MinIO，Worker 的爬虫容器通过 HTTP 从 MinIO 下载
   # 异机部署时将 "minio:9000" 替换为 MinIO 所在机器的 IP:端口 或域名
   MINIO_ENDPOINT: minio:9000
+  # 爬虫容器内访问 MinIO 的地址；生产模式走同一 Docker 网络，服务名即可直连
+  MINIO_CONTAINER_ENDPOINT: minio:9000
   <<: *minio-credentials # 展开 MINIO_ROOT_USER / MINIO_ROOT_PASSWORD
   MINIO_BUCKET_NAME: spidermanage-projects # 代码包存储桶名称
 
@@ -105,6 +107,10 @@ x-common-env:
   DOCKER_NETWORK: spidermanage_net
 
   # ── 时区 ──
+  # TZ       — 系统级时区（影响容器内 date 命令、日志时间戳等）
+  # TIMEZONE — 应用级时区（控制所有业务时间戳的统一基准）
+  # 两者保持一致，修改时只需改上方 x-timezone 锚点即可全局生效
+  TIMEZONE: *timezone
   TZ: *timezone
 
 # ==============================================================================

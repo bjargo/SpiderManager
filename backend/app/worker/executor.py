@@ -9,6 +9,8 @@ import time
 from typing import Dict, Any, List
 from datetime import datetime
 
+from app.common import timezone
+
 from redis.exceptions import RedisError, ConnectionError, TimeoutError
 from app.common.redis import redis_manager
 from app.worker.heartbeat import NODE_ID
@@ -104,7 +106,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
 
     try:
         # 1. 标记 running
-        await _update_task_status(task_id, "running", node_id=NODE_ID, started_at=datetime.utcnow())
+        await _update_task_status(task_id, "running", node_id=NODE_ID, started_at=timezone.now())
         if redis_manager.client:
             running_status = {"task_id": task_id, "status": "running", "node_id": NODE_ID, "start_time": time.time()}
             await redis_manager.client.set(status_key, json.dumps(running_status), ex=7 * 24 * 3600)
@@ -125,7 +127,16 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
         final_status = "success"
         return_code = 0
 
-        for raw_chunk in log_stream:
+        while True:
+            try:
+                raw_chunk = await asyncio.to_thread(next, log_stream, None)
+            except Exception as read_err:
+                logger.warning("Error reading container logs: %s", read_err)
+                break
+            
+            if raw_chunk is None:
+                break
+
             text = raw_chunk.decode("utf-8", errors="ignore").rstrip() if isinstance(raw_chunk, bytes) else str(raw_chunk).rstrip()
             if not text:
                 continue
@@ -144,11 +155,11 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
 
                 log_buffer.append(line)
 
-                now = time.time()
-                if len(log_buffer) >= settings.LOG_FLUSH_SIZE or (now - last_flush_time) >= settings.LOG_FLUSH_INTERVAL:
+                current_time = time.time()
+                if len(log_buffer) >= settings.LOG_FLUSH_SIZE or (current_time - last_flush_time) >= settings.LOG_FLUSH_INTERVAL:
                     await _flush_logs(task_id, log_buffer.copy())
                     log_buffer.clear()
-                    last_flush_time = now
+                    last_flush_time = current_time
 
             # 检查 kill 信号
             if redis_manager.client:
@@ -159,6 +170,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                         logger.warning("Task %s received kill signal, stopping container.", task_id)
                         await redis_manager.client.publish(channel, "[SYSTEM: Task killed by user]")
                         await asyncio.to_thread(docker_mgr.stop_container, container_name, 5)
+                        await asyncio.to_thread(docker_mgr.remove_container, container_name, True)
                         await redis_manager.client.delete(kill_key)
                         killed_by_user = True
                         final_status = "cancelled"
@@ -166,6 +178,9 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                         break
                 except Exception as e:
                     logger.error("Error checking kill signal for task %s: %s", task_id, e)
+            
+            if killed_by_user:
+                break
 
         # 4. 等待容器退出并获取退出码
         if not killed_by_user:
@@ -202,7 +217,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
 
         await _update_task_status(
             task_id, final_status,
-            finished_at=datetime.utcnow(),
+            finished_at=timezone.now(),
             error_detail=f"exit code: {return_code}" if return_code != 0 else None,
         )
 
@@ -218,9 +233,11 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
             await redis_manager.client.set(status_key, json.dumps(error_status), ex=7 * 24 * 3600)
             await redis_manager.client.publish(channel, f"[SYSTEM: Task failed with unexpected error: {e}]")
 
-        await _update_task_status(task_id, "error", error_detail=str(e), finished_at=datetime.utcnow())
+        await _update_task_status(task_id, "error", error_detail=str(e), finished_at=timezone.now())
 
     finally:
+        # 显式清理容器（即使 auto_remove=True，有时 docker-py 也不会彻底清理退出码非 0 的容器，或者进程被外界 kill 时）
+        await asyncio.to_thread(docker_mgr.remove_container, container_name, force=True)
         docker_mgr.close()
 
 
@@ -256,7 +273,7 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
 
     try:
         # 1. 记录 Running 状态
-        await _update_task_status(task_id, "running", node_id=NODE_ID, started_at=datetime.utcnow())
+        await _update_task_status(task_id, "running", node_id=NODE_ID, started_at=timezone.now())
 
         if redis_manager.client:
             running_status = {"task_id": task_id, "status": "running", "node_id": NODE_ID, "start_time": time.time()}
@@ -372,11 +389,11 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
                 # 缓冲日志
                 log_buffer.append(text)
 
-                now = time.time()
-                if len(log_buffer) >= settings.LOG_FLUSH_SIZE or (now - last_flush_time) >= settings.LOG_FLUSH_INTERVAL:
+                current_time = time.time()
+                if len(log_buffer) >= settings.LOG_FLUSH_SIZE or (current_time - last_flush_time) >= settings.LOG_FLUSH_INTERVAL:
                     await _flush_logs(task_id, log_buffer.copy())
                     log_buffer.clear()
-                    last_flush_time = now
+                    last_flush_time = current_time
 
             # 等待进程真正退出
             await asyncio.to_thread(process.wait, timeout=5)
@@ -426,7 +443,7 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
         # 写回最终状态到数据库
         await _update_task_status(
             task_id, final_status,
-            finished_at=datetime.utcnow(),
+            finished_at=timezone.now(),
             error_detail=f"exit code: {return_code}" if return_code != 0 else None,
         )
 
@@ -448,7 +465,7 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
             await redis_manager.client.set(status_key, json.dumps(error_status), ex=7 * 24 * 3600)
             await redis_manager.client.publish(channel, f"[SYSTEM: Task failed with unexpected error: {e}]")
 
-        await _update_task_status(task_id, "error", error_detail=str(e), finished_at=datetime.utcnow())
+        await _update_task_status(task_id, "error", error_detail=str(e), finished_at=timezone.now())
 
     finally:
         # 4. 彻底清理临时代码目录，防止磁盘爆满

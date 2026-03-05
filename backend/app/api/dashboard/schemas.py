@@ -15,6 +15,7 @@ class TrendData(BaseModel):
 
 class RecentTask(BaseModel):
     id: str
+    spiderId: Optional[int] = None
     spiderName: str
     nodeName: str
     status: str

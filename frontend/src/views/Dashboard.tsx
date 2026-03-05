@@ -4,6 +4,7 @@ import {
     Activity, Box, Zap, AlertTriangle,
     CheckCircle, XCircle, Clock
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
     fetchDashboardStats,
     fetchTaskTrends,
@@ -15,10 +16,12 @@ import {
 import './Dashboard.css';
 
 export default function Dashboard() {
+    const navigate = useNavigate();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [trendData, setTrendData] = useState<TrendData[]>([]);
     const [recentTasks, setRecentTasks] = useState<RecentTask[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const loadData = async () => {
@@ -32,8 +35,9 @@ export default function Dashboard() {
                 if (statsRes.code === 200) setStats(statsRes.data as DashboardStats);
                 if (trendsRes.code === 200) setTrendData(trendsRes.data as TrendData[]);
                 if (recentRes.code === 200) setRecentTasks(recentRes.data as RecentTask[]);
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Failed to fetch dashboard data:", err);
+                setError(err.message || '获取仪表盘数据失败');
             } finally {
                 setLoading(false);
             }
@@ -118,6 +122,15 @@ export default function Dashboard() {
         return <div className="dashboard-loading">正在加载仪表盘数据...</div>;
     }
 
+    if (error) {
+        return (
+            <div className="dashboard-loading" style={{ color: 'var(--status-offline)', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', justifyContent: 'center' }}>
+                <AlertTriangle size={36} />
+                <span>加载失败: {error}</span>
+            </div>
+        );
+    }
+
     return (
         <div className="dashboard-container">
             {/* 顶层核心指标卡片 */}
@@ -180,7 +193,13 @@ export default function Dashboard() {
                     <h3 className="feed-title">最近运行任务</h3>
                     <div className="feed-list">
                         {recentTasks.map(task => (
-                            <div className="feed-item" key={task.id}>
+                            <div
+                                className="feed-item"
+                                key={task.id}
+                                onClick={() => navigate(`/tasks?taskId=${task.id}`)}
+                                style={{ cursor: 'pointer' }}
+                                title="查看任务详情"
+                            >
                                 <div className="fi-status">
                                     {task.status === 'success' && <CheckCircle size={18} color="var(--status-online)" />}
                                     {task.status === 'failed' && <XCircle size={18} color="var(--status-offline)" />}
@@ -188,7 +207,19 @@ export default function Dashboard() {
                                 </div>
                                 <div className="fi-details">
                                     <div className="fi-header">
-                                        <span className="fi-spider">{task.spiderName}</span>
+                                        <span
+                                            className="fi-spider"
+                                            onClick={(e) => {
+                                                if (task.spiderId) {
+                                                    e.stopPropagation();
+                                                    navigate(`/spiders?id=${task.spiderId}`);
+                                                }
+                                            }}
+                                            style={task.spiderId ? { cursor: 'pointer', color: 'var(--accent-primary)', textDecoration: 'underline' } : {}}
+                                            title={task.spiderId ? "跳转到该爬虫" : undefined}
+                                        >
+                                            {task.spiderName}
+                                        </span>
                                         <span className={`fi-badge ${task.status}`}>{task.status}</span>
                                     </div>
                                     <div className="fi-meta">

@@ -4,6 +4,8 @@
 from typing import List, Optional
 from datetime import datetime
 
+from app.common.timezone import now
+
 from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,7 +61,7 @@ async def read_message(
 
     msg.is_read = True
     if not msg.read_at:
-        msg.read_at = datetime.utcnow()
+        msg.read_at = now()
     session.add(msg)
     await session.commit()
     await session.refresh(msg)

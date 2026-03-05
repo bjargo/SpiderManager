@@ -8,7 +8,8 @@ from typing import Optional
 
 from fastapi import Depends, Request
 from fastapi_users import BaseUserManager, UUIDIDMixin
-from fastapi_users_db_sqlmodel import SQLModelUserDatabaseAsync
+from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.users.models import User
 from app.db.database import get_async_session
@@ -33,13 +34,13 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
         logger.info(f"User {user.email} logged in.")
 
 
-async def get_user_db(session=Depends(get_async_session)):
-    """提供 fastapi-users 所需的用户数据库适配器。"""
-    yield SQLModelUserDatabaseAsync(session, User)
+async def get_user_db(session: AsyncSession = Depends(get_async_session)):
+    """提供 fastapi-users 所需的 SQLAlchemy 用户数据库适配器。"""
+    yield SQLAlchemyUserDatabase(session, User)
 
 
 async def get_user_manager(
-    user_db: SQLModelUserDatabaseAsync = Depends(get_user_db),
+    user_db: SQLAlchemyUserDatabase = Depends(get_user_db),
 ):
     """提供 UserManager 实例。"""
     yield UserManager(user_db)

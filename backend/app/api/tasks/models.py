@@ -2,6 +2,8 @@ from typing import Optional
 from sqlmodel import SQLModel, Field
 from datetime import datetime
 
+from app.common.timezone import now
+
 
 class SpiderTask(SQLModel, table=True):
     """爬虫任务执行记录"""
@@ -20,6 +22,6 @@ class SpiderTask(SQLModel, table=True):
     command: Optional[str] = Field(default=None, description="执行命令")
     error_detail: Optional[str] = Field(default=None, description="异常信息")
 
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="任务创建时间")
+    created_at: datetime = Field(default_factory=now, description="任务创建时间")
     started_at: Optional[datetime] = Field(default=None, description="任务开始时间")
     finished_at: Optional[datetime] = Field(default=None, description="任务结束时间")

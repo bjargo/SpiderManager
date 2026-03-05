@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CalendarClock, Plus, Trash2, Pencil, X, Loader2, Clock, Bug, Server } from 'lucide-react';
 import { fetchCronTasks, addCronTask, deleteCronTask, updateCronTask, toggleCronTask } from '@/api/scheduler';
 import { fetchSpiderList } from '@/api/spider';
@@ -8,7 +9,20 @@ import type { CronTaskResponse, CronTaskCreate, CronTaskUpdate } from '@/types/s
 import type { SpiderItem } from '@/types/spider';
 import type { SpiderNode } from '@/types/node';
 import { CronEditor } from '@/components/CronEditor';
+import cronstrue from 'cronstrue/i18n';
 import './Scheduler.css';
+
+// ─────────────────────────────────────────────────
+// Helper: 获取人类可读的 Cron 描述
+// ─────────────────────────────────────────────────
+function getCronDescription(expr: string): string {
+    if (!expr) return '';
+    try {
+        return cronstrue.toString(expr, { locale: 'zh_CN', use24HourTimeFormat: true });
+    } catch {
+        return '';
+    }
+}
 
 // ─────────────────────────────────────────────────
 // Toast 提示
@@ -89,6 +103,12 @@ function ScheduleModal({ mode, initial, projects, spiders, nodes, tasks, onClose
     const [description, setDescription] = useState(initial?.description ?? '');
     const [selectedNodes, setSelectedNodes] = useState<string[]>(initial?.target_node_ids ?? []);
     const [submitting, setSubmitting] = useState(false);
+
+    // 当 cron 表达式改变时，自动更新说明描述
+    useEffect(() => {
+        const desc = getCronDescription(cronExpr);
+        if (desc) setDescription(desc);
+    }, [cronExpr]);
 
     // 按项目过滤爬虫
     const filteredSpiders = projectId
@@ -218,7 +238,7 @@ function ScheduleModal({ mode, initial, projects, spiders, nodes, tasks, onClose
 
                     {/* 说明描述 */}
                     <div className="sch-field">
-                        <label>说明描述</label>
+                        <label>说明描述 (根据 Cron 自动生成)</label>
                         <input
                             type="text"
                             className="sch-input"
@@ -331,6 +351,7 @@ function DeleteConfirmModal({ task, onClose, onDeleted, showToast }: DeleteModal
 // 主视图
 // ─────────────────────────────────────────────────
 export default function Scheduler() {
+    const navigate = useNavigate();
     const [tasks, setTasks] = useState<CronTaskResponse[]>([]);
     const [projects, setProjects] = useState<ProjectItem[]>([]);
     const [spiders, setSpiders] = useState<SpiderItem[]>([]);
@@ -474,22 +495,37 @@ export default function Scheduler() {
                             {tasks.map(task => (
                                 <tr key={task.job_id} className={!task.enabled ? 'row-disabled' : ''}>
                                     <td>
-                                        <div className="sch-spider-cell">
+                                        <div className="sch-spider-cell"
+                                            onClick={(e) => { e.stopPropagation(); navigate(`/spiders?id=${task.spider_id}`); }}
+                                            style={{ cursor: 'pointer', color: 'var(--accent-primary)' }}
+                                            title="跳转到该爬虫"
+                                        >
                                             <Bug size={14} className="sch-spider-icon" />
                                             <span>{task.spider_name || `Spider #${task.spider_id}`}</span>
                                         </div>
                                     </td>
                                     <td><span className="sch-cron-tag">{task.cron_expr}</span></td>
-                                    <td className="sch-desc-cell">{task.description || <span className="text-muted">—</span>}</td>
+                                    <td className="sch-desc-cell" title={task.description || getCronDescription(task.cron_expr)}>
+                                        {task.description || <span className="text-muted">{getCronDescription(task.cron_expr) || '—'}</span>}
+                                    </td>
                                     <td className="sch-nodes-cell">
                                         {task.target_node_ids && task.target_node_ids.length > 0 ? (
                                             <div className="sch-node-tags">
                                                 {task.target_node_ids.map(nid => {
                                                     const node = nodes.find(n => n.node_id === nid);
                                                     return (
-                                                        <span key={nid} className="sch-node-tag" title={node?.name || nid}>
+                                                        <span key={nid} className="sch-node-tag" title={node ? `${node.name || nid} (${node.status})` : nid}>
                                                             <Server size={12} />
                                                             {node?.name || nid.substring(0, 8)}
+                                                            {node && (
+                                                                <span
+                                                                    className="sch-node-dot"
+                                                                    style={{
+                                                                        background: node.status === 'online' ? '#4ade80' : '#f87171',
+                                                                        marginLeft: '4px'
+                                                                    }}
+                                                                />
+                                                            )}
                                                         </span>
                                                     );
                                                 })}

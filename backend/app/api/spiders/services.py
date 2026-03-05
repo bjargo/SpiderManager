@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 
 from app.api.spiders.models import Spider
 from app.api.spiders.schemas import SpiderCreate, SpiderUpdate
+from app.common.timezone import now
 
 class SpiderService:
     @staticmethod
@@ -58,7 +59,7 @@ class SpiderService:
         for key, value in update_data.items():
             setattr(db_spider, key, value)
             
-        db_spider.updated_at = datetime.utcnow()
+        db_spider.updated_at = now()
         
         try:
             db.add(db_spider)

@@ -18,9 +18,9 @@ async def get_dashboard_stats(redis: Redis = Depends(get_redis), session: AsyncS
     return ApiResponse.success(data=stats)
 
 @router.get("/trends", response_model=ApiResponse[List[TrendData]], summary="获取过去7天运行趋势")
-async def get_dashboard_trends(redis: Redis = Depends(get_redis)):
+async def get_dashboard_trends(redis: Redis = Depends(get_redis), session: AsyncSession = Depends(get_async_session)):
     """获取成功/失败任务按天分布"""
-    trends = await DashboardService.get_trends(redis)
+    trends = await DashboardService.get_trends(redis, session)
     return ApiResponse.success(data=trends)
 
 @router.get("/recent", response_model=ApiResponse[List[RecentTask]], summary="获取最近运行的任务")

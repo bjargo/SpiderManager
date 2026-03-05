@@ -6,6 +6,7 @@ DockerManager — DooD (Docker-outside-of-Docker) 爬虫容器管理模块
 """
 import logging
 from typing import Any, Dict, Optional
+from app.common.storage.minio_client import minio_manager
 
 import docker
 from docker.errors import (
@@ -104,21 +105,31 @@ class DockerManager:
         script_path: str = task_payload["script_path"]
         timeout_seconds: int = task_payload.get("timeout_seconds", 3600)
 
-        # ── 构造 MinIO 下载地址 ──
-        minio_endpoint = settings.MINIO_ENDPOINT
-        bucket = settings.MINIO_BUCKET_NAME
-        download_url = f"http://{minio_endpoint}/{bucket}/{source_url}"
+        # ── 构造容器内签发的 MinIO 预签名下载地址 ──
+        try:
+            download_url = minio_manager.generate_presigned_url_for_container(
+                object_name=source_url,
+                expires_in_minutes=15
+            )
+        except Exception as e:
+            logger.error(f"Failed to generate container download URL for {source_url}: {e}")
+            raise RuntimeError(f"Cannot generate presigned URL for container: {e}")
 
         # ── 拼装自包含的 Shell 命令 ──
-        # 工作流: 安装 unzip → 下载 ZIP → 解压 → 进入目录 → 执行脚本
+        # 工作流: 用 Python 内置库下载并解压 ZIP → 进入目录 → 执行脚本
+        # 使用 Python 而非 wget/unzip，避免精简镜像（python:3.x-slim 等）缺少这些工具的问题。
+        py_download = (
+            "import urllib.request, zipfile, io, sys; "
+            f"data = urllib.request.urlopen('{download_url}').read(); "
+            "zipfile.ZipFile(io.BytesIO(data)).extractall('.')"
+        )
         shell_command = (
             "set -e && "
             "mkdir -p /work && cd /work && "
-            f"wget -q -O code.zip '{download_url}' && "
-            "unzip -o -q code.zip && "
-            "rm -f code.zip && "
-            # 进入解压后的第一个目录（若 ZIP 包有顶级目录）或当前目录
-            "cd $(ls -d */ 2>/dev/null | head -1 || echo '.') && "
+            f"python3 -c \"{py_download}\" && "
+            # 若 ZIP 内有一个顶级目录则进入，否则留在当前目录
+            "dir=$(ls -d */ 2>/dev/null | head -1 || true) && "
+            "[ -n \"$dir\" ] && cd \"$dir\" || true && "
             f"timeout {timeout_seconds} {script_path}"
         )
 
@@ -190,9 +201,25 @@ class DockerManager:
             container.stop(timeout=timeout)
             logger.info("Container %s stopped.", container_name_or_id)
         except NotFound:
-            logger.warning("Container %s not found, may have already been removed.", container_name_or_id)
+            # 可能是跑完了或者已经被自动删除了，不必警告
+            pass
         except APIError as exc:
             logger.error("Failed to stop container %s: %s", container_name_or_id, exc)
+
+    def remove_container(self, container_name_or_id: str, force: bool = True) -> None:
+        """强化清理：删除指定容器"""
+        try:
+            container = self.client.containers.get(container_name_or_id)
+            container.remove(force=force)
+            logger.info("Container %s removed explicitly.", container_name_or_id)
+        except NotFound:
+            pass
+        except APIError as exc:
+            # 如果因为 auto_remove=True 导致 Docker 已经在后台删除，会抛出 409 Conflict，直接忽略即可。
+            if exc.response is not None and exc.response.status_code == 409:
+                pass
+            else:
+                logger.warning("Failed to explicitly remove container %s: %s", container_name_or_id, exc)
 
     def get_container_logs(
         self,

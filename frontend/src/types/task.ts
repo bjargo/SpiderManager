@@ -31,6 +31,9 @@ export interface TaskListParams {
     limit?: number;
     status?: string;
     spider_id?: number;
+    task_id?: string;
+    start_time?: string;
+    end_time?: string;
 }
 
 export interface TaskListResponse {

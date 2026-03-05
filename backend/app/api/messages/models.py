@@ -2,6 +2,8 @@ from sqlmodel import SQLModel, Field
 from datetime import datetime
 from typing import Optional
 
+from app.common.timezone import now
+
 class SystemMessage(SQLModel, table=True):
     __tablename__ = "system_messages"
 
@@ -11,5 +13,5 @@ class SystemMessage(SQLModel, table=True):
     sender_id: Optional[int] = Field(default=None, index=True, description="发送者ID，为空代表系统自动发送")
     receiver_id: int = Field(index=True, description="接收者ID")
     is_read: bool = Field(default=False, description="是否已被阅读")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="发送时间")
+    created_at: datetime = Field(default_factory=now, description="发送时间")
     read_at: Optional[datetime] = Field(default=None, description="阅读时间")

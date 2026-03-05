@@ -1,9 +1,10 @@
 import asyncio
 import json
 import logging
+from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status, Query
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status, Query, Request
 from redis.asyncio import Redis
 from sqlalchemy import select, func, desc
 from app.db.database import get_async_session, async_session_maker
@@ -19,6 +20,9 @@ from app.api.tasks.schemas import TaskRequest, TaskListResponse
 from app.api.tasks.models import SpiderTask
 from app.api.tasks.cron_schemas import CronTaskCreate, CronTaskResponse, CronTaskUpdate, CronTaskToggle
 from app.api.spiders.models import Spider
+from app.api.users.models import User
+from app.common.dependencies import require_viewer, require_developer
+from app.api.audit.service import record_audit_log
 from app.core.scheduler import scheduler
 from app.worker.cron_jobs import dispatch_scheduled_task
 
@@ -57,13 +61,17 @@ async def websocket_task_logs(websocket: WebSocket, task_id: str) -> None:
         await pubsub.unsubscribe(channel)
         await pubsub.close()
 
-@router.get("/", response_model=ApiResponse[TaskListResponse], summary="获取任务列表")
-async def get_task_list(
-    skip: int = Query(0, description="跳过记录数"),
-    limit: int = Query(50, description="返回记录数"),
-    status_filter: str | None = Query(None, alias="status", description="任务状态过滤"),
-    spider_id: int | None = Query(None, description="所属爬虫ID过滤"),
+@router.get("", response_model=ApiResponse[TaskListResponse], summary="查询所有最近任务(分页+筛选)")
+async def get_all_tasks(
+    status_filter: str | None = Query(None, alias="status"),
+    spider_id: int | None = Query(None),
+    task_id: str | None = Query(None),
+    start_time: str | None = Query(None, description="任务创建时间 >= 该值, YYYY-MM-DD HH:MM:SS"),
+    end_time: str | None = Query(None, description="任务创建时间 <= 该值, YYYY-MM-DD HH:MM:SS"),
+    skip: int = Query(0),
+    limit: int = Query(50),
     session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_viewer),
 ):
     """
     带分页和条件过滤的任务列表查询。
@@ -78,13 +86,35 @@ async def get_task_list(
         if spider_id:
             query = query.where(SpiderTask.spider_id == spider_id)
             count_query = count_query.where(SpiderTask.spider_id == spider_id)
+        if task_id:
+            query = query.where(SpiderTask.task_id == task_id)
+            count_query = count_query.where(SpiderTask.task_id == task_id)
+        
+        # ── Time filtering ──
+        # asyncpg 对参数类型推断严格，必须传 datetime 对象而非字符串，
+        # 否则会绑定为 VARCHAR 导致与 TIMESTAMP 列比较时类型错误。
+        _TIME_FMT = "%Y-%m-%d %H:%M:%S"
+        try:
+            if start_time:
+                dt_start = datetime.strptime(start_time, _TIME_FMT)
+                query = query.where(SpiderTask.created_at >= dt_start)
+                count_query = count_query.where(SpiderTask.created_at >= dt_start)
+            if end_time:
+                dt_end = datetime.strptime(end_time, _TIME_FMT)
+                query = query.where(SpiderTask.created_at <= dt_end)
+                count_query = count_query.where(SpiderTask.created_at <= dt_end)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="时间格式错误，请使用 YYYY-MM-DD HH:MM:SS 格式",
+            )
 
         # Count total
         count_result = await session.execute(count_query)
         total = count_result.scalar_one()
 
-        # Fetch page
-        query = query.order_by(desc(SpiderTask.created_at)).offset(skip).limit(limit)
+        # Fetch page. Use id.desc() instead of created_at.desc() to leverage PK index for huge performance gain
+        query = query.order_by(desc(SpiderTask.id)).offset(skip).limit(limit)
         result = await session.execute(query)
         items = result.scalars().all()
 
@@ -99,8 +129,10 @@ async def get_task_list(
 @router.post("/{task_id}/stop", response_model=ApiResponse, summary="强制停止运行中的任务")
 async def stop_task(
     task_id: str,
+    request: Request,
     redis: Redis = Depends(get_redis),
     session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_developer),
 ):
     """
     强制终止正在运行的任务。
@@ -114,12 +146,13 @@ async def stop_task(
         select(SpiderTask).where(SpiderTask.task_id == task_id)
     )
     task = result.scalars().first()
-
     if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Task {task_id} not found",
-        )
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    spider = await session.get(Spider, task.spider_id)
+    if spider:
+        from app.common.dependencies import verify_resource_owner
+        verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
 
     if task.status not in ("running", "pending"):
         raise HTTPException(
@@ -129,13 +162,13 @@ async def stop_task(
 
     # ── 2. 直接更新数据库状态为 cancelled ──
     try:
-        from datetime import datetime
+        from app.common.timezone import now
         await session.execute(
             sa_update(SpiderTask)
             .where(SpiderTask.task_id == task_id)
             .values(
                 status="cancelled",
-                finished_at=datetime.utcnow(),
+                finished_at=now(),
                 error_detail="Cancelled by user",
             )
         )
@@ -160,13 +193,36 @@ async def stop_task(
         # Redis 异常不应阻断整个终止流程，DB 已更新成功
         logger.warning(f"Redis error when sending kill signal for task {task_id}: {e}")
 
+    # ── 4. 记录审计日志：停止任务 ──
+    try:
+        await record_audit_log(
+            session=session,
+            operator=operator,
+            action="STOP",
+            resource_type="task",
+            resource_id=task_id,
+            original_value=json.dumps({
+                "spider_id": task.spider_id,
+                "spider_name": task.spider_name,
+                "previous_status": task.status,
+            }, default=str, ensure_ascii=False),
+            new_value=json.dumps({"status": "cancelled"}, ensure_ascii=False),
+            status_code=200,
+            request=request,
+        )
+        await session.commit()
+    except Exception as e:
+        logger.warning(f"Failed to record audit log for stopping task {task_id}: {e}")
+
     return ApiResponse.success(data={"task_id": task_id}, message="Task cancelled")
 
 
 @router.post("/{task_id}/delete", response_model=ApiResponse, summary="删除任务记录")
 async def delete_task(
     task_id: str,
+    request: Request,
     session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_developer),
 ):
     """
     删除指定任务的数据库记录，同时级联删除关联的日志。
@@ -180,6 +236,12 @@ async def delete_task(
         select(SpiderTask).where(SpiderTask.task_id == task_id)
     )
     task = result.scalars().first()
+    
+    if task:
+        spider = await session.get(Spider, task.spider_id)
+        if spider:
+            from app.common.dependencies import verify_resource_owner
+            verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
 
     if not task:
         raise HTTPException(
@@ -200,6 +262,20 @@ async def delete_task(
         )
         await session.execute(
             sa_delete(SpiderTask).where(SpiderTask.task_id == task_id)
+        )
+        await record_audit_log(
+            session=session,
+            operator=operator,
+            action="DELETE",
+            resource_type="task",
+            resource_id=task_id,
+            original_value=json.dumps({
+                "spider_id": task.spider_id,
+                "spider_name": task.spider_name,
+                "status": task.status,
+            }, default=str, ensure_ascii=False),
+            status_code=200,
+            request=request,
         )
         await session.commit()
         logger.info(f"Task {task_id} and its logs deleted successfully")

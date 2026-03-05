@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Play, Bug, Clock, Server, Activity, StopCircle, RefreshCw, Terminal, CheckCircle, XCircle, Trash2, FileText } from 'lucide-react';
 import { fetchTaskList, stopTask, deleteTask } from '@/api/task';
 import { fetchSpiderList } from '@/api/spider';
@@ -40,6 +41,7 @@ function calculateDuration(start: string | null, end: string | null): string {
 // 主视图
 // ─────────────────────────────────────────────────
 export default function TaskManagement() {
+    const navigate = useNavigate();
 
     const [tasks, setTasks] = useState<SpiderTaskOut[]>([]);
     const [spiders, setSpiders] = useState<SpiderItem[]>([]);
@@ -49,6 +51,9 @@ export default function TaskManagement() {
 
     const [filterStatus, setFilterStatus] = useState<string>('');
     const [filterSpider, setFilterSpider] = useState<string>('');
+    const [filterTaskId, setFilterTaskId] = useState<string>('');
+    const [filterStartDate, setFilterStartDate] = useState<string>('');
+    const [filterEndDate, setFilterEndDate] = useState<string>('');
 
     const [page, setPage] = useState(1);
     const limit = 20;
@@ -56,12 +61,24 @@ export default function TaskManagement() {
     const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
     const [stoppingId, setStoppingId] = useState<string | null>(null);
 
+    // 解析 URL 参数
+    useEffect(() => {
+        const query = new URLSearchParams(window.location.search);
+        const navTaskId = query.get('taskId');
+        if (navTaskId) {
+            setFilterTaskId(navTaskId);
+        }
+    }, []);
+
     const loadTasks = useCallback(async () => {
         setLoading(true);
         try {
             const params: any = { skip: (page - 1) * limit, limit };
             if (filterStatus) params.status = filterStatus;
             if (filterSpider) params.spider_id = Number(filterSpider);
+            if (filterTaskId) params.task_id = filterTaskId;
+            if (filterStartDate) params.start_time = `${filterStartDate} 00:00:00`;
+            if (filterEndDate) params.end_time = `${filterEndDate} 23:59:59`;
 
             const res = await fetchTaskList(params);
             if (res.code === 200 && res.data) {
@@ -70,7 +87,7 @@ export default function TaskManagement() {
             }
         } catch { /* silent */ }
         setLoading(false);
-    }, [page, limit, filterStatus, filterSpider]);
+    }, [page, limit, filterStatus, filterSpider, filterTaskId, filterStartDate, filterEndDate]);
 
     const loadSpiders = useCallback(async () => {
         try {
@@ -152,6 +169,40 @@ export default function TaskManagement() {
         }
     };
 
+    const handleClearDates = () => {
+        setFilterStartDate('');
+        setFilterEndDate('');
+        setPage(1);
+    };
+
+    // ── 快捷日期 ──
+    const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
+
+    const handleShortcutToday = () => {
+        const today = toDateStr(new Date());
+        setFilterStartDate(today);
+        setFilterEndDate(today);
+        setPage(1);
+    };
+
+    const handleShortcutWeek = () => {
+        const now = new Date();
+        const day = now.getDay() === 0 ? 6 : now.getDay() - 1; // Mon=0
+        const mon = new Date(now);
+        mon.setDate(now.getDate() - day);
+        setFilterStartDate(toDateStr(mon));
+        setFilterEndDate(toDateStr(now));
+        setPage(1);
+    };
+
+    const handleShortcutMonth = () => {
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        setFilterStartDate(toDateStr(firstDay));
+        setFilterEndDate(toDateStr(now));
+        setPage(1);
+    };
+
     return (
         <div className="tm-container">
             <div className="tm-toolbar glass-panel">
@@ -160,19 +211,22 @@ export default function TaskManagement() {
                     <span className="tm-count">共 {total} 条记录</span>
                 </div>
                 <div className="tm-filters">
+                    {/* 状态筛选 */}
                     <div className="tm-filter-item">
                         <select
                             value={filterStatus}
                             onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
                         >
                             <option value="">所有状态</option>
-                            <option value="pending">Pending (等待中)</option>
-                            <option value="running">Running (运行中)</option>
-                            <option value="success">Success (成功)</option>
-                            <option value="error">Error (失败)</option>
-                            <option value="cancelled">Cancelled (已终止)</option>
+                            <option value="pending">Pending</option>
+                            <option value="running">Running</option>
+                            <option value="success">Success</option>
+                            <option value="error">Error</option>
+                            <option value="cancelled">Cancelled</option>
                         </select>
                     </div>
+
+                    {/* 爬虫筛选 */}
                     <div className="tm-filter-item">
                         <select
                             value={filterSpider}
@@ -184,6 +238,38 @@ export default function TaskManagement() {
                             ))}
                         </select>
                     </div>
+
+                    {/* 日期筛选区 */}
+                    <div className="tm-date-range">
+                        <div className="tm-date-shortcuts">
+                            <button className="tm-shortcut-btn" onClick={handleShortcutToday}>今天</button>
+                            <button className="tm-shortcut-btn" onClick={handleShortcutWeek}>本周</button>
+                            <button className="tm-shortcut-btn" onClick={handleShortcutMonth}>本月</button>
+                        </div>
+                        <div className="tm-date-inputs">
+                            <input
+                                type="date"
+                                value={filterStartDate}
+                                onChange={(e) => { setFilterStartDate(e.target.value); setPage(1); }}
+                                className="tm-date-picker"
+                                title="开始日期"
+                            />
+                            <span className="tm-date-sep">→</span>
+                            <input
+                                type="date"
+                                value={filterEndDate}
+                                onChange={(e) => { setFilterEndDate(e.target.value); setPage(1); }}
+                                className="tm-date-picker"
+                                title="结束日期"
+                            />
+                            {(filterStartDate || filterEndDate) && (
+                                <button className="tm-btn-clear" onClick={handleClearDates} title="清除日期">
+                                    <XCircle size={14} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
                     <button className="tm-btn-refresh" onClick={loadTasks} disabled={loading} title="刷新列表">
                         <RefreshCw size={16} className={classNames({ spin: loading })} />
                     </button>
@@ -218,12 +304,38 @@ export default function TaskManagement() {
                                         <td className="tm-id">
                                             <Terminal size={14} /> {task.task_id}
                                         </td>
-                                        <td className="tm-spider">
+                                        <td className="tm-spider"
+                                            onClick={(e) => { e.stopPropagation(); navigate(`/spiders?id=${task.spider_id}`); }}
+                                            style={{ cursor: 'pointer', color: 'var(--accent-primary)' }}
+                                            title="跳转到该爬虫"
+                                        >
                                             <Bug size={14} /> {task.spider_name}
                                         </td>
                                         <td>{getStatusBadge(task.status)}</td>
                                         <td className="tm-node">
-                                            {task.node_id ? <><Server size={14} /> {nodes.find(n => n.node_id === task.node_id)?.name || task.node_id}</> : '-'}
+                                            {task.node_id ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <Server size={14} />
+                                                    <span>{nodes.find(n => n.node_id === task.node_id)?.name || task.node_id}</span>
+                                                    {(() => {
+                                                        const node = nodes.find(n => n.node_id === task.node_id);
+                                                        if (!node) return null;
+                                                        return (
+                                                            <span
+                                                                title={`节点状态: ${node.status}`}
+                                                                style={{
+                                                                    display: 'inline-block',
+                                                                    width: '8px',
+                                                                    height: '8px',
+                                                                    borderRadius: '50%',
+                                                                    backgroundColor: node.status === 'online' ? '#4ade80' : '#f87171',
+                                                                    flexShrink: 0
+                                                                }}
+                                                            />
+                                                        );
+                                                    })()}
+                                                </div>
+                                            ) : '-'}
                                         </td>
                                         <td className="tm-time">{formatDateTime(task.started_at || task.created_at)}</td>
                                         <td className="tm-duration">{calculateDuration(task.started_at, task.finished_at)}</td>
