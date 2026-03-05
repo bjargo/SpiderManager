@@ -19,9 +19,9 @@ import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any
-
+from app.db.database import spider_async_engine as async_engine
+from sqlalchemy import text
 from redis.exceptions import RedisError
-
 from app.common.redis import redis_manager
 from config import settings
 
@@ -62,7 +62,7 @@ async def _ensure_table_exists(table_name: str) -> None:
     - `_id`          BIGSERIAL PRIMARY KEY
     - `_task_id`     TEXT NOT NULL         ← 关联任务 ID（含索引）
     - `_data`        JSONB NOT NULL        ← 存储完整的采集数据
-    - `_created_at`  TIMESTAMPTZ DEFAULT NOW()
+    - `_created_at`  TIMESTAMP DEFAULT NOW()
 
     使用 JSONB 的优势：
     - 爬虫字段名变化时无需 DDL 变更
@@ -74,9 +74,6 @@ async def _ensure_table_exists(table_name: str) -> None:
     """
     if table_name in _known_tables:
         return
-
-    from app.db.database import async_engine
-    from sqlalchemy import text
 
     async with async_engine.connect() as conn:
         # 查询 information_schema 判断表是否已存在
@@ -97,7 +94,7 @@ async def _ensure_table_exists(table_name: str) -> None:
             f'  "_id" BIGSERIAL PRIMARY KEY,\n'
             f'  "_task_id" TEXT NOT NULL,\n'
             f'  "_data" JSONB NOT NULL,\n'
-            f'  "_created_at" TIMESTAMPTZ DEFAULT NOW()\n'
+            f'  "_created_at" TIMESTAMP DEFAULT NOW()\n'
             f')'
         )
 
@@ -139,8 +136,7 @@ async def _batch_insert(
     if not rows:
         return
 
-    from app.db.database import async_engine
-    from sqlalchemy import text
+    
 
     # 构建参数化占位符:
     # INSERT INTO "table" ("_task_id", "_data")
@@ -149,7 +145,7 @@ async def _batch_insert(
     params: dict[str, str] = {}
 
     for idx, row in enumerate(rows):
-        value_groups.append(f"(:tid_{idx}, :data_{idx}::jsonb)")
+        value_groups.append(f"(:tid_{idx}, CAST(:data_{idx} AS JSONB))")
         params[f"tid_{idx}"] = task_id
         params[f"data_{idx}"] = json.dumps(row, ensure_ascii=False)
 

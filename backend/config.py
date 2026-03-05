@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     DB_USER: str = "postgres"             # 数据库用户名
     DB_PASSWORD: str = "postgrespassword" # 数据库密码
     DB_NAME: str = "spidermanage"         # 数据库名称
+    SPIDER_DB_NAME: str = "Spider"        # 专用爬虫数据库名称
 
     # ── 缓存与队列配置 (Redis) ──
     # 各字段可独立通过环境变量覆盖，由 REDIS_URL 属性自动拼接完整连接字符串
@@ -61,6 +62,14 @@ class Settings(BaseSettings):
         return (
             f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        )
+
+    @cached_property
+    def SPIDER_DATABASE_URL(self) -> str:
+        """从独立字段拼接爬虫数据专属 PostgreSQL 异步连接字符串"""
+        return (
+            f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.SPIDER_DB_NAME}"
         )
 
     @cached_property

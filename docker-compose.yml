@@ -94,6 +94,7 @@ x-common-env:
   DB_USER: ${POSTGRES_USER:-postgres}
   DB_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
   DB_NAME: ${POSTGRES_DB:-spidermanage}
+  SPIDER_DB_NAME: Spider
 
   # [2/5] Redis 连接
   # ⚠️ 直接引用 x-host-redis 锚点
