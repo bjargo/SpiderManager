@@ -26,6 +26,38 @@ version: '3.8'
 # ============================
 x-timezone: &timezone Asia/Shanghai
 
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║                                                                            ║
+# ║            ⚠️⚠️⚠️  异 机 部 署 — 主 机 地 址 配 置  ⚠️⚠️⚠️                ║
+# ║                                                                            ║
+# ║  以下 4 个锚点定义了各基础设施服务的主机地址。                             ║
+# ║  默认值为 Docker Compose 内部服务名，仅同机部署有效。                      ║
+# ║                                                                            ║
+# ║  👉 异机部署时，只需在此处将服务名替换为目标机器的 真实 IP 或域名，        ║
+# ║     下方所有引用处将自动生效，无需修改其他任何配置！                       ║
+# ║                                                                            ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+# ── 数据库主机 ──
+# 默认 "db" = 本文件 services.db 的容器服务名
+# 异机部署时替换为 PostgreSQL 所在机器的 IP 或域名，如: 192.168.1.50
+x-host-db: &host-db db
+
+# ── Redis 主机 ──
+# 默认 "redis" = 本文件 services.redis 的容器服务名
+# 异机部署时替换为 Redis 所在机器的 IP 或域名，如: 192.168.1.51
+x-host-redis: &host-redis redis
+
+# ── MinIO 主机（含端口）──
+# 默认 "minio:9000" = 本文件 services.minio 的容器服务名 + S3 API 端口
+# 异机部署时替换为 MinIO 所在机器的 IP:端口，如: 192.168.1.52:9000
+x-host-minio: &host-minio minio:9000
+
+# ── Master API 地址（含协议和端口）──
+# 默认 "http://master:8000" = 本文件 services.master 的容器服务名
+# 异机部署时替换为 Master 所在机器的完整地址，如: http://192.168.1.100:8000
+x-host-master-api: &host-master-api http://master:8000
+
 # ============================
 # 凭据定义（单一事实来源）
 # 修改密码只需改这里一处，所有引用处自动生效
@@ -49,31 +81,52 @@ x-minio-credentials: &minio-credentials
 # ============================
 x-common-env:
 
-  # ── 数据库连接 ──
-  # 格式: postgresql+asyncpg://用户名:密码@主机:端口/数据库名
-  # 异机部署时将 "db" 替换为 PostgreSQL 所在机器的 IP 或域名
-  &common-env
-  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgrespassword}@db:5432/${POSTGRES_DB:-spidermanage}
+  # ── 异机部署相关配置 ──
+  # 以下 5 项的主机地址由文件顶部 x-host-* 锚点统一管理。
+  # ⚠️ 异机部署时请直接修改顶部锚点，此处会自动生效。
 
-  # ── Redis 连接 ──
-  # 用途：任务队列（BLPOP/LPUSH）、实时日志推送（Pub/Sub）、心跳状态存储、任务状态缓存
-  # 异机部署时将 "redis" 替换为 Redis 所在机器的 IP 或域名
-  REDIS_URL: redis://redis:6379/0
+  # [1/5] 数据库连接
+  # 格式: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+  # ⚠️ 直接引用 x-host-db 锚点
+  &common-env
+  DB_HOST: *host-db
+  DB_PORT: 5432
+  DB_USER: ${POSTGRES_USER:-postgres}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
+  DB_NAME: ${POSTGRES_DB:-spidermanage}
+
+  # [2/5] Redis 连接
+  # ⚠️ 直接引用 x-host-redis 锚点
+  REDIS_HOST: *host-redis
+  REDIS_PORT: 6379
+  REDIS_DB: 0
+
+  # [3/5] MinIO — 后端/Worker 访问地址（引用 x-host-minio 锚点）
+  MINIO_ENDPOINT: *host-minio
+
+  # [4/5] MinIO — 爬虫容器内访问地址（引用 x-host-minio 锚点）
+  MINIO_CONTAINER_ENDPOINT: *host-minio
+
+  # [5/5] 爬虫容器回连后端 API 的地址（引用 x-host-master-api 锚点）
+  # 爬虫容器内的 SDK 通过此地址将采集数据 POST 到 Master API
+  SPIDER_API_URL: *host-master-api
+
+  # ── Redis 连接池参数 ──
   REDIS_MAX_CONNECTIONS: 100 # 异步连接池最大连接数
   REDIS_SOCKET_TIMEOUT: 5.0 # 单次 Socket 操作超时（秒）
 
-  # ── MinIO 对象存储 ──
-  # Master 上传爬虫代码 ZIP 到 MinIO，Worker 的爬虫容器通过 HTTP 从 MinIO 下载
-  # 异机部署时将 "minio:9000" 替换为 MinIO 所在机器的 IP:端口 或域名
-  MINIO_ENDPOINT: minio:9000
-  # 爬虫容器内访问 MinIO 的地址；生产模式走同一 Docker 网络，服务名即可直连
-  MINIO_CONTAINER_ENDPOINT: minio:9000
+  # ── MinIO 凭据与存储桶 ──
   <<: *minio-credentials # 展开 MINIO_ROOT_USER / MINIO_ROOT_PASSWORD
   MINIO_BUCKET_NAME: spidermanage-projects # 代码包存储桶名称
 
   # ── 安全配置 ──
   SECRET_KEY: change-me-in-production-use-a-long-random-string # JWT 签名密钥，生产环境务必替换！
   ACCESS_TOKEN_EXPIRE_MINUTES: 10080 # JWT Token 有效期（分钟），默认 7 天
+
+  # ── 初始超级管理员配置 ──
+  # 首次启动时自动创建的超级管理员账号，生产环境务必修改！
+  FIRST_SUPERUSER_EMAIL: admin@admin.com
+  FIRST_SUPERUSER_PASSWORD: admin
 
   # ── 心跳配置 ──
   # Worker/Master 节点定期向 Redis 写入系统状态（CPU/内存/磁盘），供前端大盘展示
@@ -87,6 +140,14 @@ x-common-env:
 
   # ── 任务状态配置 ──
   TASK_STATUS_EXPIRE_SECONDS: 604800 # 任务状态在 Redis 中的过期时间（秒），默认 7 天
+
+  # ── Worker 日志缓冲 ──
+  LOG_FLUSH_SIZE: 20 # 每 N 行 flush 一次
+  LOG_FLUSH_INTERVAL: 2.0 # 最多 M 秒 flush 一次
+
+  # ── Data Reducer 批量入库 ──
+  REDUCER_BATCH_SIZE: 100 # 累积 N 条数据触发一次批量写入
+  REDUCER_FLUSH_INTERVAL: 1.0 # 最多 M 秒强制 flush 一次
 
   # ── Docker 容器资源限制 (DooD) ──
   # 以下参数控制 Worker 通过 DockerManager 动态创建的「爬虫容器」的资源配额。

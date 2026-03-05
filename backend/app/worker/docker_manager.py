@@ -137,6 +137,7 @@ class DockerManager:
 
         environment = {
             "TASK_ID": task_id,
+            "SPIDER_API_URL": settings.SPIDER_API_URL,
             "PYTHONUNBUFFERED": "1",
         }
 

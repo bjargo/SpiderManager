@@ -1,6 +1,17 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Any, Optional, List
 from app.api.spiders.schemas import SpiderTaskOut
+
+
+class DataIngestRequest(BaseModel):
+    """
+    数据 Ingestion 请求体。
+    爬虫在采集到数据后，通过此接口将数据推入 Redis 队列，
+    由下游消费者异步落库，实现采集与存储的解耦。
+    """
+    table_name: str = Field(..., min_length=1, max_length=128, description="目标数据表名")
+    data: list[dict[str, Any]] = Field(..., min_length=1, description="待写入的数据记录列表")
+
 
 class TaskRequest(BaseModel):
     """

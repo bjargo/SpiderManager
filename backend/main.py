@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI):
     node_role = getattr(settings, "NODE_ROLE", "master")
     heartbeat_task = None
     task_listener_task = None
+    data_reducer_task = None
 
     if node_role != "worker":
         start_scheduler()
@@ -77,9 +78,15 @@ async def lifespan(app: FastAPI):
     # master 和 worker 都可以消费任务队列
     from app.worker.executor import start_task_listener
     task_listener_task = await start_task_listener()
+
+    # Data Reducer：消费爬虫采集数据队列，批量入库 + 实时分发
+    from app.worker.data_reducer import start_data_reducer
+    data_reducer_task = await start_data_reducer()
         
     yield
     
+    if data_reducer_task:
+        data_reducer_task.cancel()
     if task_listener_task:
         task_listener_task.cancel()
     if node_role != "worker":
@@ -135,8 +142,9 @@ app.include_router(dashboard_router, prefix="/api/dashboard", tags=["大盘"])
 app.include_router(admin_router, prefix="/api/admin", tags=["管理员"])
 
 # 独立注册 WebSocket 路由，避免 Router 前缀干扰
-from app.api.tasks.router import websocket_task_logs
+from app.api.tasks.router import websocket_task_logs, websocket_task_data
 app.add_api_websocket_route("/ws-logs/{task_id}", websocket_task_logs)
+app.add_api_websocket_route("/ws-data/{task_id}", websocket_task_data)
 
 @app.get("/")
 def read_root():

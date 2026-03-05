@@ -11,9 +11,9 @@ jobstores = {
     'default': RedisJobStore(
         jobs_key='apscheduler.jobs',
         run_times_key='apscheduler.run_times',
-        # 解析 redis_url 的参数传递给 redis-py
-        host=settings.REDIS_URL.split('redis://')[1].split(':')[0],
-        port=int(settings.REDIS_URL.split(':')[2].split('/')[0])
+        # 直接使用 config 中拆分后的主机和端口字段
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT
     )
 }
 

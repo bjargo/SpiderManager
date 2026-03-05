@@ -1,5 +1,7 @@
 import os
 import uuid
+from functools import cached_property
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,12 +38,35 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # ── 数据库配置 (PostgreSQL) ──
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgrespassword@localhost:5432/spidermanage"
+    # 各字段可独立通过环境变量覆盖，由 DATABASE_URL 属性自动拼接完整连接字符串
+    # docker-compose.yml 中 DB_HOST 可直接引用 YAML 锚点 *host-db
+    DB_HOST: str = "localhost"            # 数据库主机，Docker 模式覆盖为服务名 "db"
+    DB_PORT: int = 5432                   # 数据库端口
+    DB_USER: str = "postgres"             # 数据库用户名
+    DB_PASSWORD: str = "postgrespassword" # 数据库密码
+    DB_NAME: str = "spidermanage"         # 数据库名称
 
     # ── 缓存与队列配置 (Redis) ──
-    REDIS_URL: str = "redis://localhost:6379/0"
+    # 各字段可独立通过环境变量覆盖，由 REDIS_URL 属性自动拼接完整连接字符串
+    # docker-compose.yml 中 REDIS_HOST 可直接引用 YAML 锚点 *host-redis
+    REDIS_HOST: str = "localhost"  # Redis 主机，Docker 模式覆盖为服务名 "redis"
+    REDIS_PORT: int = 6379         # Redis 端口
+    REDIS_DB: int = 0              # Redis 数据库编号
     REDIS_MAX_CONNECTIONS: int = 100
     REDIS_SOCKET_TIMEOUT: float = 15.0
+
+    @cached_property
+    def DATABASE_URL(self) -> str:
+        """从独立字段拼接 PostgreSQL 异步连接字符串"""
+        return (
+            f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        )
+
+    @cached_property
+    def REDIS_URL(self) -> str:
+        """从独立字段拼接 Redis 连接字符串"""
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     # ── MINIO / 对象存储配置 ──
     MINIO_ENDPOINT: str = "localhost:9000"          # 宿主机/后端访问 MinIO 的地址
@@ -83,16 +108,27 @@ class Settings(BaseSettings):
     # ── Redis 队列键名 ──
     PUBLIC_QUEUE_KEY: str = "task:queue:public"
     NODE_QUEUE_PREFIX: str = "task:queue:"
+    INGEST_QUEUE_KEY: str = "spider:data:stream"
 
     # ── Worker 日志缓冲 ──
     LOG_FLUSH_SIZE: int = 20          # 每 N 行 flush 一次
     LOG_FLUSH_INTERVAL: float = 2.0   # 最多 M 秒 flush 一次
+
+    # ── Data Reducer 批量入库 ──
+    REDUCER_BATCH_SIZE: int = 100         # 累积 N 条数据触发一次批量写入
+    REDUCER_FLUSH_INTERVAL: float = 1.0   # 最多 M 秒强制 flush 一次
 
     # ── Docker 容器资源限制 (DooD) ──
     DOCKER_MEM_LIMIT: str = "512m"
     DOCKER_CPU_PERIOD: int = 100_000   # CFS 调度器周期 (µs)
     DOCKER_CPU_QUOTA: int = 100_000    # 等效 1 核 CPU
     DOCKER_NETWORK: str = "spidermanage_net"
+
+    # ── 爬虫容器内回连后端的地址 ──
+    # 容器(爬虫)通过 Docker 内部网络访问 Master API 的地址
+    # Docker Compose 模式：走服务名 http://master:8000（同网络自动解析）
+    # 本地开发模式：设为 http://host.docker.internal:8000 或 http://localhost:8000
+    SPIDER_API_URL: str = "http://master:8000"
 
     model_config = SettingsConfigDict(
         env_file=".env",

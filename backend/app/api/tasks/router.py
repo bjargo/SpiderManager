@@ -16,7 +16,7 @@ from apscheduler.triggers.cron import CronTrigger
 from app.common.schemas.api_response import ApiResponse
 from app.common.redis import get_redis, redis_manager
 from config import settings
-from app.api.tasks.schemas import TaskRequest, TaskListResponse
+from app.api.tasks.schemas import TaskRequest, TaskListResponse, DataIngestRequest
 from app.api.tasks.models import SpiderTask
 from app.api.tasks.cron_schemas import CronTaskCreate, CronTaskResponse, CronTaskUpdate, CronTaskToggle
 from app.api.spiders.models import Spider
@@ -57,6 +57,39 @@ async def websocket_task_logs(websocket: WebSocket, task_id: str) -> None:
         logger.info("WebSocket client disconnected for task %s", task_id)
     except Exception as e:
         logger.error("WebSocket error for task %s: %s", task_id, e)
+    finally:
+        await pubsub.unsubscribe(channel)
+        await pubsub.close()
+
+
+async def websocket_task_data(websocket: WebSocket, task_id: str) -> None:
+    """通过 Redis Pub/Sub 向前端实时推送任务采集数据"""
+    await websocket.accept()
+
+    if not redis_manager.client:
+        await websocket.close(code=1011, reason="Redis inactive")
+        return
+
+    pubsub = redis_manager.client.pubsub()
+    channel = f"data:channel:{task_id}"
+    await pubsub.subscribe(channel)
+    logger.info("WebSocket data client connected for task %s", task_id)
+
+    try:
+        while True:
+            message = await pubsub.get_message(
+                ignore_subscribe_messages=True, timeout=0.1
+            )
+            if message and message["type"] == "message":
+                data = message["data"]
+                text = data.decode("utf-8") if isinstance(data, bytes) else data
+                await websocket.send_text(text)
+            else:
+                await asyncio.sleep(0.01)
+    except WebSocketDisconnect:
+        logger.info("WebSocket data client disconnected for task %s", task_id)
+    except Exception as e:
+        logger.error("WebSocket data error for task %s: %s", task_id, e)
     finally:
         await pubsub.unsubscribe(channel)
         await pubsub.close()
@@ -221,12 +254,14 @@ async def stop_task(
 async def delete_task(
     task_id: str,
     request: Request,
+    redis: Redis = Depends(get_redis),
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
 ):
     """
     删除指定任务的数据库记录，同时级联删除关联的日志。
     仅允许删除非 running 状态的任务。
+    同时清理该任务在 Redis 中可能残留的未处理数据缓存。
     """
     from sqlalchemy import delete as sa_delete
     from app.api.tasks.task_log_models import TaskLog
@@ -279,13 +314,28 @@ async def delete_task(
         )
         await session.commit()
         logger.info(f"Task {task_id} and its logs deleted successfully")
-        return ApiResponse.success(data={"task_id": task_id}, message="Task deleted")
     except Exception as e:
         logger.error(f"Failed to delete task {task_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete task: {str(e)}",
         )
+
+    # ── 清理 Redis 中该任务的残留数据缓存 ──
+    try:
+        # 1. 清理 task:status:{task_id}:* 系列键
+        async for key in redis.scan_iter(match=f"task:status:{task_id}:*", count=100):
+            await redis.delete(key)
+
+        # 2. 清理 kill signal 键
+        await redis.delete(f"task:kill:{task_id}")
+
+        logger.info(f"Redis residual keys cleaned for task {task_id}")
+    except RedisError as e:
+        # Redis 清理失败不应阻断删除流程
+        logger.warning(f"Failed to clean Redis residual data for task {task_id}: {e}")
+
+    return ApiResponse.success(data={"task_id": task_id}, message="Task deleted")
 
 
 @router.get("/{task_id}/logs", response_model=ApiResponse, summary="查询任务历史日志")
@@ -322,6 +372,62 @@ async def get_task_logs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch task logs: {str(e)}",
         )
+
+
+# ─────────────────────────────────────────────────
+# 数据 Ingestion 路由 (高并发接入层)
+# ─────────────────────────────────────────────────
+
+
+
+@router.post("/data/ingest", response_model=ApiResponse, summary="爬虫数据接入（高并发Gateway）")
+async def ingest_data(
+    task_id: str = Query(..., min_length=1, description="关联的任务 ID"),
+    body: DataIngestRequest = ...,
+    redis: Redis = Depends(get_redis),
+) -> ApiResponse:
+    """
+    高并发数据接入网关。
+
+    爬虫在运行过程中采集到数据后，调用此接口将数据快速压入 Redis 队列，
+    由下游消费者异步批量落库到 Postgres，实现采集与存储的完全解耦。
+
+    **设计约束**：
+    - 接口内部严禁任何 Postgres 同步操作
+    - 响应时间需维持在毫秒级，以支撑百级别爬虫并发
+    """
+    from app.common.timezone import now
+
+    timestamp = now().isoformat()
+
+    try:
+        message = json.dumps(
+            {
+                "t": body.table_name,
+                "d": body.data,
+                "task_id": task_id,
+                "ts": timestamp,
+            },
+            ensure_ascii=False,
+        )
+        await redis.lpush(settings.INGEST_QUEUE_KEY, message)
+    except RedisError as e:
+        logger.error("Redis error during data ingestion for task %s: %s", task_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"数据接入失败，Redis 服务异常: {str(e)}",
+        )
+    except (TypeError, ValueError) as e:
+        logger.error("Serialization error during data ingestion for task %s: %s", task_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"数据序列化失败: {str(e)}",
+        )
+
+    return ApiResponse.success(
+        data={"task_id": task_id, "count": len(body.data)},
+        message="数据已接入队列",
+    )
 
 
 @router.post("/run", response_model=ApiResponse, summary="下发爬虫任务")
