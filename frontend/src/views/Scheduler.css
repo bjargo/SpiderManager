@@ -27,7 +27,7 @@
     gap: 10px;
     font-size: 1.125rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-primary);
 }
 
 .sch-count {
@@ -78,7 +78,7 @@
 .sch-filter-input {
     background: transparent;
     border: none;
-    color: #fff;
+    color: var(--text-primary);
     font-size: 0.875rem;
     padding: 9px 0;
     width: 160px;
@@ -103,13 +103,13 @@
 
 .sch-filter-clear:hover {
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-hover);
 }
 
 .sch-filter-select {
     background: transparent;
     border: none;
-    color: #fff;
+    color: var(--text-primary);
     font-size: 0.875rem;
     padding: 9px 0;
     padding-right: 20px;
@@ -120,7 +120,7 @@
 
 .sch-filter-select option {
     background: var(--bg-primary);
-    color: #fff;
+    color: var(--text-primary);
 }
 
 .sch-filter-reset {
@@ -140,7 +140,7 @@
 .sch-filter-reset:hover {
     color: var(--text-primary);
     border-color: var(--text-muted);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bg-hover);
 }
 
 /* ─────────────────────────────── 按钮 ─────────────────────────────── */
@@ -179,7 +179,7 @@
 }
 
 .sch-btn-ghost:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bg-hover);
 }
 
 .sch-btn-danger {
@@ -210,7 +210,7 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     border-bottom: 1px solid var(--border-color);
-    background: rgba(0, 0, 0, 0.15);
+    background: var(--bg-hover);
 }
 
 .sch-table td {
@@ -222,7 +222,7 @@
 }
 
 .sch-table tr:hover td {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-hover);
 }
 
 .sch-table tr:last-child td {
@@ -281,7 +281,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bg-hover);
     border: 1px solid var(--border-color);
     padding: 2px 8px;
     border-radius: 4px;
@@ -335,7 +335,7 @@
 
 .sch-icon-btn:hover {
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--bg-hover);
 }
 
 .sch-icon-btn.delete:hover {
@@ -465,7 +465,7 @@
     gap: 8px;
     font-size: 1rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-primary);
 }
 
 .sch-modal-close {
@@ -525,7 +525,7 @@
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    color: #fff;
+    color: var(--text-primary);
     font-size: 0.875rem;
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
@@ -563,14 +563,14 @@
     padding: 10px 14px;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-hover);
     cursor: pointer;
     transition: all 0.15s;
     font-size: 0.85rem;
 }
 
 .sch-node-item:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--bg-input);
     border-color: var(--text-muted);
 }
 
@@ -593,7 +593,7 @@
 
 .sch-node-name {
     font-weight: 500;
-    color: #fff;
+    color: var(--text-primary);
     flex: 1;
 }
 
@@ -616,7 +616,7 @@
 }
 
 .sch-confirm-text strong {
-    color: #fff;
+    color: var(--text-primary);
 }
 
 /* ─────────────────────────────── Toast ─────────────────────────────── */

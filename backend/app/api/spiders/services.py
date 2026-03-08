@@ -46,7 +46,7 @@ class SpiderService:
     def get_spiders(db: Session, skip: int = 0, limit: int = 100) -> List[Spider]:
         statement = select(Spider).offset(skip).limit(limit)
         results = db.exec(statement).all()
-        return results
+        return list(results)
 
     @staticmethod
     def update_spider(db: Session, spider_id: int, spider_in: SpiderUpdate) -> Spider:

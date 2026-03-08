@@ -17,7 +17,7 @@
 .tm-toolbar-left h2 {
     font-size: 1.25rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-primary);
     display: flex;
     align-items: center;
     gap: 10px;
@@ -77,7 +77,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--bg-hover);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 4px 10px;
@@ -209,7 +209,7 @@
 .tm-table th {
     text-align: left;
     padding: 14px 20px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-hover);
     color: var(--text-secondary);
     font-weight: 500;
     border-bottom: 1px solid var(--border-color);
@@ -227,7 +227,7 @@
 }
 
 .tm-table tr:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-hover);
 }
 
 .tm-table tr.active-row {
@@ -341,7 +341,7 @@
 }
 
 .tm-action-btn.delete {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--bg-hover);
     color: var(--text-muted);
     border: 1px solid var(--border-color);
 }

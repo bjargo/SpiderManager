@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Globe, HardDrive, RefreshCw, Layers, Settings, Trash2, X, Zap } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -26,9 +27,12 @@ const ProgressBar = ({ percent, label }: { percent: number; label?: string }) =>
 };
 
 export default function NodeDashboard() {
+    const location = useLocation();
     const [nodes, setNodes] = useState<SpiderNode[]>([]);
+    const [allNodes, setAllNodes] = useState<SpiderNode[]>([]); // 保存所有节点
     const [loading, setLoading] = useState(true);
     const [lastSync, setLastSync] = useState<Date | null>(null);
+    const [statusFilter, setStatusFilter] = useState<string>(''); // 状态筛选
 
     // Modal State
     const [isConfigModalOpen, setConfigModalOpen] = useState(false);
@@ -41,6 +45,15 @@ export default function NodeDashboard() {
     });
     const [formError, setFormError] = useState<string | null>(null);
 
+    // 解析 URL 参数
+    useEffect(() => {
+        const query = new URLSearchParams(location.search);
+        const statusParam = query.get('status');
+        if (statusParam) {
+            setStatusFilter(statusParam);
+        }
+    }, [location.search]);
+
     // Determines if a node is offline based on if the last heartbeat is older than 15 seconds
     const checkIsOffline = (lastHeartbeatISO: string): boolean => {
         try {
@@ -52,13 +65,24 @@ export default function NodeDashboard() {
         }
     };
 
+    // 根据筛选条件过滤节点
+    useEffect(() => {
+        if (statusFilter === 'online') {
+            setNodes(allNodes.filter(node => !checkIsOffline(node.last_heartbeat)));
+        } else if (statusFilter === 'offline') {
+            setNodes(allNodes.filter(node => checkIsOffline(node.last_heartbeat)));
+        } else {
+            setNodes(allNodes);
+        }
+    }, [allNodes, statusFilter]);
+
     const loadData = async () => {
         try {
             const res = await fetchNodeList();
             if (res.code === 200 && res.data) {
                 // Ensure nodes are sorted logically by role
                 const sorted = [...res.data].sort((a, _b) => a.role === 'master' ? -1 : 1);
-                setNodes(sorted);
+                setAllNodes(sorted);
                 setLastSync(new Date());
             }
         } catch (e) {
@@ -127,7 +151,40 @@ export default function NodeDashboard() {
     return (
         <div className="node-table-view-container">
             <div className="table-header-toolbar">
-                <h1 className="page-title"><Layers size={22} /> 集群节点管理</h1>
+                <h1 className="page-title">
+                    <Layers size={22} /> 集群节点管理
+                    {statusFilter && (
+                        <span style={{
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            padding: '2px 10px',
+                            borderRadius: '20px',
+                            background: statusFilter === 'online' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                            color: statusFilter === 'online' ? '#10b981' : '#ef4444',
+                            marginLeft: '10px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}>
+                            {statusFilter === 'online' ? '仅显示在线节点' : '仅显示离线节点'}
+                            <button
+                                onClick={() => setStatusFilter('')}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: 'inherit',
+                                    padding: 0,
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                }}
+                                title="清除筛选"
+                            >
+                                <X size={14} />
+                            </button>
+                        </span>
+                    )}
+                </h1>
                 <div className="table-actions">
                     <span className="last-sync-tag">
                         最后同步: {lastSync ? lastSync.toLocaleTimeString() : '...'}

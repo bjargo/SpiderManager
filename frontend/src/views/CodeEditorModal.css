@@ -30,13 +30,13 @@
     width: 92vw;
     height: 88vh;
     max-width: 1600px;
-    background: var(--bg-surface, #1a1b2e);
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
     border-radius: 16px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 24px 80px var(--shadow-color);
     animation: ce-slide-up 0.25s ease;
 }
 
@@ -58,8 +58,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 20px;
-    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
-    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-hover);
     flex-shrink: 0;
 }
 
@@ -73,16 +73,16 @@
 .ce-header-left h3 {
     font-size: 0.95rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-primary);
     margin: 0;
     white-space: nowrap;
 }
 
 .ce-file-path {
     font-size: 0.8rem;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--bg-input);
     padding: 4px 10px;
     border-radius: 6px;
     white-space: nowrap;
@@ -128,14 +128,14 @@
 }
 
 .ce-btn-close {
-    background: rgba(255, 255, 255, 0.06);
-    color: var(--text-secondary, #9ca3af);
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
 }
 
 .ce-btn-close:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: var(--bg-input);
+    color: var(--text-primary);
 }
 
 /* ── 主体区域 ── */
@@ -149,18 +149,18 @@
 .ce-sidebar {
     width: 260px;
     min-width: 260px;
-    border-right: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
-    background: rgba(0, 0, 0, 0.15);
+    background: var(--bg-input);
 }
 
 .ce-sidebar-header {
     padding: 12px 16px;
-    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+    border-bottom: 1px solid var(--border-color);
     font-size: 0.78rem;
     font-weight: 600;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     display: flex;
@@ -195,18 +195,18 @@
     align-items: center;
     gap: 4px;
     padding: 6px 10px;
-    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+    border-bottom: 1px solid var(--border-color);
 }
 
 .ce-file-create-input {
     flex: 1;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--bg-input);
     border: 1px solid rgba(59, 130, 246, 0.4);
     border-radius: 4px;
     padding: 5px 8px;
     font-size: 0.78rem;
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    color: #fff;
+    color: var(--text-primary);
     outline: none;
     transition: border-color 0.15s;
 }
@@ -216,7 +216,7 @@
 }
 
 .ce-file-create-input::placeholder {
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
 }
 
 .ce-file-create-confirm,
@@ -246,7 +246,7 @@
 }
 
 .ce-file-create-cancel {
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
 }
 
 .ce-file-create-cancel:hover:not(:disabled) {
@@ -283,8 +283,8 @@
 }
 
 .ce-tree-dir:hover {
-    background: rgba(255, 255, 255, 0.04);
-    color: #e5e7eb;
+    background: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 .ce-tree-arrow {
@@ -335,8 +335,8 @@
 }
 
 .ce-file-item:hover {
-    background: rgba(255, 255, 255, 0.04);
-    color: #fff;
+    background: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 .ce-file-item.active {
@@ -369,7 +369,7 @@
     opacity: 0;
     background: transparent;
     border: none;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
     cursor: pointer;
     padding: 3px;
     border-radius: 4px;
@@ -424,12 +424,12 @@
 }
 
 .ce-file-delete-no {
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
 }
 
 .ce-file-delete-no:hover:not(:disabled) {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    background: var(--bg-hover);
 }
 
 /* ── 右侧编辑器区域 ── */
@@ -448,7 +448,7 @@
     justify-content: center;
     flex-direction: column;
     gap: 12px;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
 }
 
 .ce-editor-placeholder svg {
@@ -465,7 +465,7 @@
     align-items: center;
     justify-content: center;
     gap: 10px;
-    color: var(--text-secondary, #9ca3af);
+    color: var(--text-secondary);
     font-size: 0.85rem;
 }
 
@@ -534,14 +534,14 @@
     justify-content: center;
     flex-direction: column;
     gap: 10px;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
     font-size: 0.82rem;
 }
 
 .ce-sidebar-empty {
     padding: 24px 16px;
     text-align: center;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
     font-size: 0.82rem;
 }
 
@@ -551,10 +551,10 @@
     align-items: center;
     justify-content: space-between;
     padding: 6px 16px;
-    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
-    background: rgba(0, 0, 0, 0.15);
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-input);
     font-size: 0.75rem;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
     flex-shrink: 0;
 }
 

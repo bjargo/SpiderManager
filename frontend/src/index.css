@@ -8,6 +8,11 @@
   --bg-secondary: #1a1d24;
   --bg-tertiary: #232730;
   --bg-elevated: #2c313c;
+  --bg-card: #1a1d24;
+  --bg-surface: #1a1b2e;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-input: rgba(0, 0, 0, 0.25);
+  --bg-sidebar: #1a1d24;
 
   --text-primary: #e2e8f0;
   --text-secondary: #94a3b8;
@@ -23,27 +28,57 @@
 
   --border-color: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.15);
+  --border-strong: rgba(255, 255, 255, 0.25);
+
+  --shadow-color: rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+
+  --overlay-bg: rgba(0, 0, 0, 0.65);
+  --glass-bg: rgba(26, 29, 36, 0.7);
 
   --font-base: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 :root.light-theme {
   color-scheme: light;
-  --bg-primary: #f8fafc;
+  /* 背景层次 - 更明显的区分 */
+  --bg-primary: #f1f5f9;
   --bg-secondary: #ffffff;
-  --bg-tertiary: #f1f5f9;
+  --bg-tertiary: #e2e8f0;
   --bg-elevated: #ffffff;
+  --bg-card: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-hover: #f1f5f9;
+  --bg-input: #f8fafc;
+  --bg-sidebar: #ffffff;
 
+  /* 文字颜色 - 更好的对比度 */
   --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
 
+  /* 强调色 */
   --accent-primary: #2563eb;
   --accent-hover: #1d4ed8;
-  --accent-glow: rgba(37, 99, 235, 0.2);
+  --accent-glow: rgba(37, 99, 235, 0.15);
 
-  --border-color: rgba(0, 0, 0, 0.08);
-  --border-hover: rgba(0, 0, 0, 0.15);
+  /* 边框 - 更明显的边界 */
+  --border-color: #e2e8f0;
+  --border-hover: #cbd5e1;
+  --border-strong: #94a3b8;
+
+  /* 阴影 - 增加层次感 */
+  --shadow-color: rgba(0, 0, 0, 0.08);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  --overlay-bg: rgba(15, 23, 42, 0.6);
+  --glass-bg: rgba(255, 255, 255, 0.95);
 }
 
 * {
@@ -69,7 +104,7 @@ a {
 
 /* Glassmorphism Classes */
 .glass-panel {
-  background: rgba(26, 29, 36, 0.7);
+  background: var(--glass-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-color);
@@ -112,4 +147,248 @@ a {
 
 .spin {
   animation: spin 1s linear infinite;
+}
+
+/* ============================================
+   亮模式增强样式
+   ============================================ */
+:root.light-theme .glass-panel {
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+}
+
+:root.light-theme .glass-panel:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-hover);
+}
+
+/* 卡片样式增强 */
+:root.light-theme .metric-card,
+:root.light-theme .node-card,
+:root.light-theme .sv-toolbar,
+:root.light-theme .pm-toolbar,
+:root.light-theme .sch-header,
+:root.light-theme .tm-toolbar,
+:root.light-theme .al-toolbar,
+:root.light-theme .al-filter {
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+}
+
+:root.light-theme .metric-card:hover,
+:root.light-theme .node-card:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+/* 表格增强 */
+:root.light-theme .sv-table,
+:root.light-theme .pm-table,
+:root.light-theme .sch-table,
+:root.light-theme .tm-table,
+:root.light-theme .al-table {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+:root.light-theme .sv-table th,
+:root.light-theme .pm-table th,
+:root.light-theme .sch-table th,
+:root.light-theme .tm-table th,
+:root.light-theme .al-table thead th {
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+}
+
+:root.light-theme .sv-table td,
+:root.light-theme .pm-table td,
+:root.light-theme .sch-table td,
+:root.light-theme .tm-table td,
+:root.light-theme .al-table tbody td {
+  border-bottom: 1px solid var(--border-color);
+}
+
+:root.light-theme .sv-table tbody tr:hover,
+:root.light-theme .pm-table tbody tr:hover,
+:root.light-theme .sch-table tbody tr:hover,
+:root.light-theme .tm-table tbody tr:hover,
+:root.light-theme .al-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+/* 按钮增强 */
+:root.light-theme .sv-btn-ghost,
+:root.light-theme .pm-btn-ghost,
+:root.light-theme .sch-btn-ghost,
+:root.light-theme .al-btn-ghost {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+:root.light-theme .sv-btn-ghost:hover,
+:root.light-theme .pm-btn-ghost:hover,
+:root.light-theme .sch-btn-ghost:hover,
+:root.light-theme .al-btn-ghost:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+}
+
+/* 输入框增强 */
+:root.light-theme .sv-field input,
+:root.light-theme .sv-field textarea,
+:root.light-theme .sv-field select,
+:root.light-theme .pm-field input,
+:root.light-theme .pm-field textarea,
+:root.light-theme .sch-input,
+:root.light-theme .sch-select,
+:root.light-theme .al-filter-item input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+:root.light-theme .sv-field input:focus,
+:root.light-theme .sv-field textarea:focus,
+:root.light-theme .sv-field select:focus,
+:root.light-theme .pm-field input:focus,
+:root.light-theme .pm-field textarea:focus,
+:root.light-theme .sch-input:focus,
+:root.light-theme .sch-select:focus,
+:root.light-theme .al-filter-item input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* 模态框增强 */
+:root.light-theme .sv-modal,
+:root.light-theme .sv-drawer,
+:root.light-theme .pm-modal,
+:root.light-theme .pm-drawer,
+:root.light-theme .sch-modal,
+:root.light-theme .tl-container,
+:root.light-theme .th-container,
+:root.light-theme .ce-container,
+:root.light-theme .modal-content,
+:root.light-theme .dcm-modal {
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border-color);
+}
+
+/* 侧边栏增强 */
+:root.light-theme .sidebar {
+  border-right: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+:root.light-theme .nav-item:hover {
+  background: var(--bg-hover);
+}
+
+:root.light-theme .nav-item.active {
+  background: var(--accent-glow);
+  border-right: 3px solid var(--accent-primary);
+}
+
+/* 标签/徽章增强 */
+:root.light-theme .sv-tag,
+:root.light-theme .pm-tag,
+:root.light-theme .sch-node-tag,
+:root.light-theme .role-badge {
+  border: 1px solid;
+  font-weight: 500;
+}
+
+:root.light-theme .sv-tag-minio {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.3);
+}
+
+:root.light-theme .sv-tag-git {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+/* 状态指示器增强 */
+:root.light-theme .status-dot.online {
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+:root.light-theme .status-dot.offline {
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
+/* 分隔线增强 */
+:root.light-theme .sidebar-header,
+:root.light-theme .sidebar-footer,
+:root.light-theme .topbar,
+:root.light-theme .modal-header,
+:root.light-theme .modal-footer,
+:root.light-theme .sv-drawer-header,
+:root.light-theme .sv-drawer-footer,
+:root.light-theme .pm-drawer-header,
+:root.light-theme .pm-drawer-footer,
+:root.light-theme .sch-modal-header,
+:root.light-theme .sch-modal-footer {
+  border-color: var(--border-color);
+}
+
+/* 悬浮提示增强 */
+:root.light-theme .sv-toast,
+:root.light-theme .pm-toast,
+:root.light-theme .sch-toast {
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+}
+
+/* 进度条增强 */
+:root.light-theme .progress-bar,
+:root.light-theme .sv-progress-bar-bg {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+:root.light-theme .progress-fill {
+  border-radius: 4px;
+}
+
+/* 下拉菜单增强 */
+:root.light-theme .sv-custom-select-dropdown,
+:root.light-theme .ce-field-dropdown {
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+}
+
+/* 开关按钮增强 */
+:root.light-theme .sch-switch.off {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+}
+
+/* 代码编辑器增强 */
+:root.light-theme .ce-sidebar {
+  background: var(--bg-tertiary);
+  border-right: 1px solid var(--border-color);
+}
+
+:root.light-theme .ce-file-item.active {
+  background: var(--accent-glow);
+  border-left: 3px solid var(--accent-primary);
+}
+
+/* 终端/日志区域保持深色背景以确保可读性 */
+:root.light-theme .log-terminal-wrapper,
+:root.light-theme .tl-terminal,
+:root.light-theme .term-body {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+:root.light-theme .term-header {
+  background: #0f172a;
+  border-bottom: 1px solid #334155;
+}
+
+:root.light-theme .term-info {
+  color: #e2e8f0;
 }

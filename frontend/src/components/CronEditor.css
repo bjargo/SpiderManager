@@ -17,9 +17,9 @@
 
 .cev2-preset {
     padding: 5px 12px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
-    color: var(--text-secondary, #9ca3af);
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
     border-radius: 16px;
     font-size: 0.72rem;
     font-weight: 500;
@@ -29,9 +29,9 @@
 }
 
 .cev2-preset:hover {
-    border-color: var(--text-muted, #6b7280);
-    color: #fff;
-    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+    background: var(--bg-input);
 }
 
 .cev2-preset.active {
@@ -60,18 +60,18 @@
     align-items: center;
     gap: 4px;
     padding: 8px 10px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.15s;
     font-size: 0.78rem;
-    color: var(--text-secondary, #9ca3af);
+    color: var(--text-secondary);
 }
 
 .ce-field-trigger:hover {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(255, 255, 255, 0.18);
+    background: var(--bg-hover);
+    border-color: var(--border-hover);
 }
 
 .ce-field-trigger.active {
@@ -85,7 +85,7 @@
 
 .ce-field-label {
     font-size: 0.68rem;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
     flex-shrink: 0;
     font-weight: 600;
 }
@@ -97,13 +97,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     font-weight: 500;
-    color: var(--text-primary, #e5e7eb);
+    color: var(--text-primary);
     font-size: 0.75rem;
 }
 
 .ce-field-arrow {
     flex-shrink: 0;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
     transition: transform 0.15s;
 }
 
@@ -118,10 +118,10 @@
     left: 0;
     right: 0;
     min-width: 140px;
-    background: var(--bg-surface, #1e1f33);
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
     border-radius: 10px;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 12px 36px var(--shadow-color);
     z-index: 100;
     animation: cev2-dropdown-in 0.12s ease;
     overflow: hidden;
@@ -143,7 +143,7 @@
     padding: 8px 12px 4px;
     font-size: 0.68rem;
     font-weight: 600;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -157,19 +157,19 @@
 
 .ce-field-option {
     padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--bg-hover);
     border: 1px solid transparent;
     border-radius: 6px;
     font-size: 0.72rem;
-    color: var(--text-secondary, #9ca3af);
+    color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.12s;
     white-space: nowrap;
 }
 
 .ce-field-option:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+    background: var(--bg-input);
+    color: var(--text-primary);
 }
 
 .ce-field-option.selected {
@@ -180,19 +180,19 @@
 
 /* ── 自定义输入 ── */
 .ce-field-custom {
-    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+    border-top: 1px solid var(--border-color);
     padding: 6px 10px 8px;
 }
 
 .ce-field-custom-input {
     width: 100%;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
     border-radius: 5px;
     padding: 5px 8px;
     font-size: 0.72rem;
     font-family: monospace;
-    color: #fff;
+    color: var(--text-primary);
     outline: none;
     transition: border-color 0.15s;
     box-sizing: border-box;
@@ -203,7 +203,7 @@
 }
 
 .ce-field-custom-input::placeholder {
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
 }
 
 /* ── 底部：原始输入 + 描述 ── */
@@ -216,8 +216,8 @@
 .cev2-raw {
     display: flex;
     align-items: center;
-    background: var(--bg-primary, #0f1019);
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     overflow: hidden;
     transition: border-color 0.15s;
@@ -225,25 +225,25 @@
 }
 
 .cev2-raw:focus-within {
-    border-color: var(--accent-primary, #3b82f6);
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px var(--accent-glow);
 }
 
 .cev2-raw-label {
     padding: 7px 10px;
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--text-muted, #6b7280);
+    background: var(--bg-hover);
+    color: var(--text-muted);
     font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.05em;
-    border-right: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-right: 1px solid var(--border-color);
 }
 
 .cev2-raw-input {
     background: transparent;
     border: none;
     padding: 7px 12px;
-    color: var(--accent-primary, #60a5fa);
+    color: var(--accent-primary);
     font-size: 0.85rem;
     font-weight: 500;
     font-family: 'JetBrains Mono', monospace;

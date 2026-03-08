@@ -35,9 +35,10 @@ export default function Dashboard() {
                 if (statsRes.code === 200) setStats(statsRes.data as DashboardStats);
                 if (trendsRes.code === 200) setTrendData(trendsRes.data as TrendData[]);
                 if (recentRes.code === 200) setRecentTasks(recentRes.data as RecentTask[]);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error("Failed to fetch dashboard data:", err);
-                setError(err.message || '获取仪表盘数据失败');
+                const errorMessage = err instanceof Error ? err.message : '获取仪表盘数据失败';
+                setError(errorMessage);
             } finally {
                 setLoading(false);
             }
@@ -135,7 +136,12 @@ export default function Dashboard() {
         <div className="dashboard-container">
             {/* 顶层核心指标卡片 */}
             <div className="metric-cards">
-                <div className="metric-card glass-panel">
+                <div
+                    className="metric-card glass-panel"
+                    onClick={() => navigate('/nodes?status=online')}
+                    style={{ cursor: 'pointer' }}
+                    title="查看在线节点"
+                >
                     <div className="mc-icon" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--status-online)' }}>
                         <Activity size={24} />
                     </div>
@@ -147,7 +153,12 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                <div className="metric-card glass-panel">
+                <div
+                    className="metric-card glass-panel"
+                    onClick={() => navigate('/spiders')}
+                    style={{ cursor: 'pointer' }}
+                    title="查看所有爬虫"
+                >
                     <div className="mc-icon" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-primary)' }}>
                         <Box size={24} />
                     </div>
@@ -157,7 +168,12 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                <div className="metric-card glass-panel">
+                <div
+                    className="metric-card glass-panel"
+                    onClick={() => navigate('/tasks?date=today')}
+                    style={{ cursor: 'pointer' }}
+                    title="查看今日任务"
+                >
                     <div className="mc-icon" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: 'var(--status-busy)' }}>
                         <Zap size={24} />
                     </div>
@@ -167,7 +183,12 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                <div className="metric-card glass-panel">
+                <div
+                    className="metric-card glass-panel"
+                    onClick={() => navigate('/tasks?date=today&status=error')}
+                    style={{ cursor: 'pointer' }}
+                    title="查看今日失败任务"
+                >
                     <div className="mc-icon" style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: 'var(--status-offline)' }}>
                         <AlertTriangle size={24} />
                     </div>

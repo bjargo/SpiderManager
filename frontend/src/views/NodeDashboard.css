@@ -410,12 +410,12 @@
 }
 
 .modal-content {
-    background: var(--bg-card, #1e2130);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     border-radius: 16px;
     width: 100%;
     max-width: 460px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    box-shadow: 0 24px 60px var(--shadow-color), 0 0 0 1px var(--border-color);
     animation: slideUpModal 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     overflow: hidden;
 }
@@ -434,25 +434,25 @@
 
 .modal-header {
     padding: 20px 24px 18px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-hover);
 }
 
 .modal-header h3 {
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
-    color: var(--text-color, #f1f5f9);
+    color: var(--text-primary);
     letter-spacing: 0.01em;
 }
 
 .btn-close {
     background: none;
     border: none;
-    color: var(--text-color-secondary, #94a3b8);
+    color: var(--text-secondary);
     padding: 4px;
     cursor: pointer;
     border-radius: 6px;
@@ -464,8 +464,8 @@
 }
 
 .btn-close:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #f1f5f9;
+    background: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 /* ============================
@@ -492,33 +492,33 @@
     justify-content: space-between;
     align-items: center;
     padding: 14px 16px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
     border-radius: 10px;
 }
 
 .form-item label {
     font-size: 0.82rem;
     font-weight: 500;
-    color: var(--text-color-secondary, #94a3b8);
+    color: var(--text-secondary);
     letter-spacing: 0.01em;
 }
 
 .form-item.row-space-between label {
     font-size: 0.875rem;
-    color: var(--text-color, #e2e8f0);
+    color: var(--text-primary);
     line-height: 1.6;
 }
 
 .form-item small.text-muted {
     font-size: 0.78rem;
-    color: var(--text-color-secondary, #64748b);
+    color: var(--text-muted);
 }
 
 .dark-input {
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: var(--text-color, #f1f5f9);
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
     padding: 9px 12px;
     border-radius: 8px;
     font-size: 0.875rem;
@@ -534,7 +534,7 @@
 }
 
 .dark-input::placeholder {
-    color: rgba(148, 163, 184, 0.5);
+    color: var(--text-muted);
 }
 
 /* iOS-style Toggle Switch */
@@ -557,7 +557,7 @@
     position: absolute;
     cursor: pointer;
     inset: 0;
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--bg-input);
     transition: background 0.3s;
 }
 
@@ -592,8 +592,8 @@ input:checked+.slider:before {
 /* Modal Footer */
 .modal-footer {
     padding: 16px 24px;
-    border-top: 1px solid rgba(255, 255, 255, 0.07);
-    background: rgba(0, 0, 0, 0.15);
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-hover);
     display: flex;
     justify-content: flex-end;
     gap: 10px;
@@ -605,15 +605,15 @@ input:checked+.slider:before {
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--border-color);
     background: transparent;
-    color: var(--text-color-secondary, #94a3b8);
+    color: var(--text-secondary);
     transition: all 0.2s;
 }
 
 .btn-cancel:hover {
-    background: rgba(255, 255, 255, 0.07);
-    color: var(--text-color, #f1f5f9);
+    background: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 .btn-primary {

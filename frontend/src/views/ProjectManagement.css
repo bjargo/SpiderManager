@@ -35,7 +35,7 @@
 .pm-count {
     font-size: 0.85rem;
     padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bg-hover);
     border-radius: 20px;
     color: var(--text-secondary);
 }
@@ -86,7 +86,7 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     border-bottom: 1px solid var(--border-color);
-    background: rgba(0, 0, 0, 0.1);
+    background: var(--bg-hover);
 }
 
 .pm-table td {
@@ -101,7 +101,7 @@
 }
 
 .pm-table tbody tr:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-hover);
 }
 
 /* 单元格内容 */
@@ -160,9 +160,9 @@
 }
 
 .pm-tag-gray {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bg-hover);
     color: var(--text-secondary);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-color);
 }
 
 .pm-tag:hover {
@@ -180,7 +180,7 @@
     height: 28px;
     border-radius: 6px;
     border: none;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bg-hover);
     color: var(--text-secondary);
     cursor: pointer;
     display: flex;
@@ -190,7 +190,7 @@
 }
 
 .pm-btn-icon:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-input);
     color: var(--text-primary);
 }
 
@@ -247,7 +247,7 @@
 }
 
 .pm-btn-ghost:not(:disabled):hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bg-hover);
     color: var(--text-primary);
 }
 
@@ -305,7 +305,7 @@
 }
 
 .pm-drawer-close:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-hover);
     color: var(--text-primary);
 }
 
@@ -343,7 +343,7 @@
 .pm-field textarea {
     width: 100%;
     padding: 10px 12px;
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--bg-input);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     color: var(--text-primary);
@@ -361,7 +361,7 @@
 .pm-field input:focus,
 .pm-field textarea:focus {
     border-color: var(--accent-primary);
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--bg-input);
 }
 
 /* 弹窗样式 */
@@ -425,7 +425,7 @@
 
 .pm-modal-footer {
     padding: 16px 24px;
-    background: rgba(0, 0, 0, 0.1);
+    background: var(--bg-hover);
     display: flex;
     justify-content: flex-end;
     gap: 12px;

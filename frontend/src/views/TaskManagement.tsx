@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Play, Bug, Clock, Server, Activity, StopCircle, RefreshCw, Terminal, CheckCircle, XCircle, Trash2, FileText } from 'lucide-react';
 import { fetchTaskList, stopTask, deleteTask } from '@/api/task';
 import { fetchSpiderList } from '@/api/spider';
@@ -42,6 +42,7 @@ function calculateDuration(start: string | null, end: string | null): string {
 // ─────────────────────────────────────────────────
 export default function TaskManagement() {
     const navigate = useNavigate();
+    const location = useLocation();
 
     const [tasks, setTasks] = useState<SpiderTaskOut[]>([]);
     const [spiders, setSpiders] = useState<SpiderItem[]>([]);
@@ -60,15 +61,47 @@ export default function TaskManagement() {
 
     const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
     const [stoppingId, setStoppingId] = useState<string | null>(null);
+    const [isUrlParamsParsed, setIsUrlParamsParsed] = useState(false);
 
     // 解析 URL 参数
     useEffect(() => {
-        const query = new URLSearchParams(window.location.search);
+        const query = new URLSearchParams(location.search);
+
+        // 任务ID筛选
         const navTaskId = query.get('taskId');
         if (navTaskId) {
             setFilterTaskId(navTaskId);
         }
-    }, []);
+
+        // 日期筛选
+        const dateParam = query.get('date');
+        if (dateParam === 'today') {
+            const today = new Date().toISOString().slice(0, 10);
+            setFilterStartDate(today);
+            setFilterEndDate(today);
+        } else if (dateParam === 'week') {
+            const now = new Date();
+            const day = now.getDay() === 0 ? 6 : now.getDay() - 1;
+            const mon = new Date(now);
+            mon.setDate(now.getDate() - day);
+            setFilterStartDate(mon.toISOString().slice(0, 10));
+            setFilterEndDate(now.toISOString().slice(0, 10));
+        } else if (dateParam === 'month') {
+            const now = new Date();
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            setFilterStartDate(firstDay.toISOString().slice(0, 10));
+            setFilterEndDate(now.toISOString().slice(0, 10));
+        }
+
+        // 状态筛选
+        const statusParam = query.get('status');
+        if (statusParam) {
+            setFilterStatus(statusParam);
+        }
+
+        // 标记 URL 参数已解析完成
+        setIsUrlParamsParsed(true);
+    }, [location.search]);
 
     const loadTasks = useCallback(async () => {
         setLoading(true);
@@ -109,8 +142,11 @@ export default function TaskManagement() {
     }, [loadSpiders, loadNodes]);
 
     useEffect(() => {
-        loadTasks();
-    }, [loadTasks]);
+        // 只有在 URL 参数解析完成后才加载数据
+        if (isUrlParamsParsed) {
+            loadTasks();
+        }
+    }, [loadTasks, isUrlParamsParsed]);
 
     useEffect(() => {
         // 自动刷新机制: 如果有任务处于 running/pending 状态，则每5秒刷新一次

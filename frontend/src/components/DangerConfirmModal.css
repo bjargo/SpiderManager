@@ -25,11 +25,11 @@
 .dcm-modal {
     width: 420px;
     max-width: 92vw;
-    background: #1a1d24;
+    background: var(--bg-card);
     border: 1px solid rgba(239, 68, 68, 0.35);
     border-radius: 14px;
     overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(239, 68, 68, 0.15);
+    box-shadow: 0 20px 60px var(--shadow-color), 0 0 0 1px rgba(239, 68, 68, 0.15);
     animation: dcm-slide-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -82,14 +82,14 @@
 .dcm-title {
     font-size: 1rem;
     font-weight: 600;
-    color: #f8fafc;
+    color: var(--text-primary);
     flex: 1;
 }
 
 .dcm-close {
     background: transparent;
     border: none;
-    color: #64748b;
+    color: var(--text-muted);
     cursor: pointer;
     padding: 4px;
     border-radius: 6px;
@@ -99,8 +99,8 @@
 }
 
 .dcm-close:hover {
-    color: #f8fafc;
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    background: var(--bg-hover);
 }
 
 /* ── 正文 ── */
@@ -110,13 +110,13 @@
 
 .dcm-description {
     font-size: 0.9rem;
-    color: #94a3b8;
+    color: var(--text-secondary);
     line-height: 1.6;
     margin: 0 0 12px;
 }
 
 .dcm-description strong {
-    color: #f8fafc;
+    color: var(--text-primary);
 }
 
 .dcm-warning-badge {
@@ -157,14 +157,14 @@
 }
 
 .dcm-btn-cancel {
-    background: rgba(255, 255, 255, 0.06);
-    color: #94a3b8;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
 }
 
 .dcm-btn-cancel:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.1);
-    color: #f8fafc;
+    background: var(--bg-input);
+    color: var(--text-primary);
 }
 
 .dcm-btn-danger {
