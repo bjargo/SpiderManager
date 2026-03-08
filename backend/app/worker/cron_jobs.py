@@ -7,7 +7,7 @@ from app.api.spiders.models import Spider
 from app.api.tasks.models import SpiderTask
 from sqlalchemy import select
 from config import settings
-from app.common.redis import redis_manager
+from app.core.redis import redis_manager
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ async def dispatch_scheduled_task(
         task_payload = {
             "task_id": task_id,
             "spider_id": spider_id,
+            "project_id": spider.project_id,
             "language": spider.language,
             "source_type": spider.source_type,
             "source_url": spider.source_url,

@@ -6,7 +6,7 @@ import uuid
 from typing import Optional
 from fastapi_users import schemas
 
-from app.common.enums import UserRole
+from app.core.enums import UserRole
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):

@@ -5,8 +5,8 @@ import asyncio
 import zipfile
 from typing import Optional
 
-from app.common.schemas.project import SourceType
-from app.common.storage.minio_client import minio_manager
+from app.core.schemas.project import SourceType
+from app.core.storage.minio_client import minio_manager
 
 logger = logging.getLogger(__name__)
 
@@ -32,28 +32,14 @@ async def _download_and_extract_zip(source_url: str, dest_dir: str) -> None:
             zip_path,
         )
 
-        # 解压
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(dest_dir)
+        # 解压 (在大文件时属于 CPU/IO 密集型，需放入线程池)
+        def _extract():
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(dest_dir)
+            os.remove(zip_path)
 
-        # 清理 zip 包
-        os.remove(zip_path)
+        await asyncio.to_thread(_extract)
 
-        # 处理"单一顶层子目录"问题：
-        # 当用户将整个文件夹打包成 zip 时（例如 `my_spider/main.py`），
-        # 解压后 dest_dir 内只有一个子目录，而不是直接包含 main.py。
-        # 这会导致 executor 以 dest_dir 为 cwd 执行 `python main.py` 时找不到文件。
-        # 修复：检测到单一子目录时，将其内容提升至 dest_dir 根层级。
-        entries = [e for e in os.listdir(dest_dir) if not e.startswith('.')]
-        if len(entries) == 1 and os.path.isdir(os.path.join(dest_dir, entries[0])):
-            single_subdir = os.path.join(dest_dir, entries[0])
-            # 将子目录中的所有内容移到 dest_dir
-            for item in os.listdir(single_subdir):
-                src = os.path.join(single_subdir, item)
-                dst = os.path.join(dest_dir, item)
-                shutil.move(src, dst)
-            shutil.rmtree(single_subdir)
-            logger.info(f"Flattened single top-level directory '{entries[0]}' in {dest_dir}")
         logger.info(f"Successfully downloaded and extracted MINIO project to {dest_dir}")
 
     except Exception as e:

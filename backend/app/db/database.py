@@ -35,8 +35,7 @@ def create_tables() -> None:
     import app.api.projects.models  # noqa: F401
     import app.api.users.models  # noqa: F401
     import app.api.tasks.models  # noqa: F401
-    import app.api.tasks.task_log_models  # noqa: F401
-    import app.api.audit.models  # noqa: F401
+    import app.core.audit.models  # noqa: F401
     try:
         with _sync_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
             res = conn.execute(text(f"SELECT 1 FROM pg_database WHERE datname='{settings.SPIDER_DB_NAME}'"))

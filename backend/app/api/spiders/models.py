@@ -3,7 +3,7 @@ from typing import Optional
 from sqlmodel import SQLModel, Field
 from datetime import datetime
 
-from app.common.timezone import now
+from app.core.timezone import now
 
 
 class Spider(SQLModel, table=True):
@@ -30,6 +30,9 @@ class Spider(SQLModel, table=True):
         index=True,
         description="资源所有者 ID（关联 users.id），用于非 Admin 用户的所有权校验",
     )
+
+    # 软删除标记
+    is_deleted: bool = Field(default=False, description="软删除标记，True 表示已删除")
 
     # 元数据
     created_at: datetime = Field(default_factory=now)

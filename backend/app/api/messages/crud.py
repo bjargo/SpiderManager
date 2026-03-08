@@ -1,7 +1,7 @@
 from sqlmodel import Session, select
 from typing import List, Optional
 from datetime import datetime
-from app.common.timezone import now
+from app.core.timezone import now
 from . import models, schemas
 
 class MessagesCRUD:

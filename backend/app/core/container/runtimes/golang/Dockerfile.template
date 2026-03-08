@@ -1,0 +1,27 @@
+# 第一阶段：编译
+FROM golang:1.21-alpine AS builder
+
+WORKDIR /build
+ENV GOPROXY=https://goproxy.cn,direct
+
+COPY . .
+RUN go mod download || true
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o spider_bin {{ entrypoint }}
+
+# 第二阶段：运行（极简 Alpine）
+FROM alpine:latest
+
+WORKDIR /app
+ENV TZ=Asia/Shanghai
+
+RUN apk add --no-cache tzdata && \
+    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone && \
+    addgroup -S spider && adduser -S spider -G spider -h /app
+
+COPY --from=builder /build/spider_bin /app/spider_bin
+RUN find . -maxdepth 2
+RUN chown -R spider:spider /app
+USER spider
+
+CMD ["/app/spider_bin"]

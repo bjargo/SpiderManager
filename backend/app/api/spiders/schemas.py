@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
+import uuid
 
 class SpiderBase(BaseModel):
     name: str = Field(..., description="爬虫名称")
@@ -15,6 +16,7 @@ class SpiderBase(BaseModel):
     command: Optional[str] = Field(None, description="执行命令，如 'python run.py'")
     # 在前端/请求中，我们用 List[str] 接收 target_nodes
     target_nodes: Optional[List[str]] = Field(None, description="指定指定的节点IDs")
+    owner_id: Optional[uuid.UUID] = Field(None, description="归属用户ID")
 
 class SpiderCreate(SpiderBase):
     pass
@@ -51,6 +53,7 @@ class SpiderOut(SpiderBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    is_deleted: bool = False
 
     class Config:
         from_attributes = True
@@ -68,6 +71,7 @@ class SpiderTaskOut(BaseModel):
     created_at: datetime
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
+    is_deleted: bool = False
 
     class Config:
         from_attributes = True

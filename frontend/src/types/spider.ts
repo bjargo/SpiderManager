@@ -9,10 +9,12 @@ export interface SpiderItem {
     project_id: string;
     source_type: SourceType;
     source_url: string;
+    language: string;
     command: string | null;
     target_nodes: string | null; // JSON-encoded list
     created_at: string;
     updated_at: string;
+    is_deleted?: boolean;
 }
 
 export interface SpiderCreatePayload {
@@ -21,6 +23,7 @@ export interface SpiderCreatePayload {
     project_id: string;
     source_type: SourceType;
     source_url: string;
+    language?: string;
     command?: string;
     target_nodes?: string[];
 }
@@ -29,6 +32,7 @@ export interface SpiderUpdatePayload {
     name?: string;
     description?: string;
     project_id?: string;
+    language?: string;
     command?: string;
     target_nodes?: string[];
 }
@@ -58,6 +62,7 @@ export interface SpiderTaskItem {
     created_at: string;
     started_at: string | null;
     finished_at: string | null;
+    is_deleted?: boolean;
 }
 
 export interface TaskLogItem {
@@ -72,4 +77,5 @@ export interface SpiderStatusData {
     task_id: string | null;
     started_at: string | null;
     finished_at: string | null;
+    is_deleted?: boolean;
 }

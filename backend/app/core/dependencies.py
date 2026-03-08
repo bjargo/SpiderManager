@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.users.models import User
 from app.api.users.auth import fastapi_users
-from app.common.enums import UserRole
+from app.core.enums import UserRole
 from app.db.database import get_async_session
 
 logger = logging.getLogger(__name__)

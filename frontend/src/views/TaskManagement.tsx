@@ -302,14 +302,18 @@ export default function TaskManagement() {
                                         className={classNames({ 'active-row': activeTaskId === task.task_id })}
                                     >
                                         <td className="tm-id">
-                                            <Terminal size={14} /> {task.task_id}
+                                            <div className="tm-id-wrapper">
+                                                <Terminal size={14} /> {task.task_id}
+                                            </div>
                                         </td>
                                         <td className="tm-spider"
                                             onClick={(e) => { e.stopPropagation(); navigate(`/spiders?id=${task.spider_id}`); }}
                                             style={{ cursor: 'pointer', color: 'var(--accent-primary)' }}
                                             title="跳转到该爬虫"
                                         >
-                                            <Bug size={14} /> {task.spider_name}
+                                            <div className="tm-spider-wrapper">
+                                                <Bug size={14} /> {task.spider_name}
+                                            </div>
                                         </td>
                                         <td>{getStatusBadge(task.status)}</td>
                                         <td className="tm-node">
@@ -339,33 +343,35 @@ export default function TaskManagement() {
                                         </td>
                                         <td className="tm-time">{formatDateTime(task.started_at || task.created_at)}</td>
                                         <td className="tm-duration">{calculateDuration(task.started_at, task.finished_at)}</td>
-                                        <td className="tm-actions">
-                                            <button
-                                                className="tm-action-btn log"
-                                                onClick={(e) => { e.stopPropagation(); setActiveTaskId(task.task_id); }}
-                                                title="查看日志"
-                                            >
-                                                <FileText size={14} /> 日志
-                                            </button>
-                                            {(task.status === 'running' || task.status === 'pending') && (
+                                        <td>
+                                            <div className="tm-actions">
                                                 <button
-                                                    className="tm-action-btn stop"
-                                                    disabled={stoppingId === task.task_id}
-                                                    onClick={(e) => handleStopTask(e, task.task_id)}
-                                                    title="强制终止"
+                                                    className="tm-action-btn log"
+                                                    onClick={(e) => { e.stopPropagation(); setActiveTaskId(task.task_id); }}
+                                                    title="查看日志"
                                                 >
-                                                    <StopCircle size={16} /> 终止
+                                                    <FileText size={14} /> 日志
                                                 </button>
-                                            )}
-                                            {task.status !== 'running' && (
-                                                <button
-                                                    className="tm-action-btn delete"
-                                                    onClick={(e) => handleDeleteTask(e, task.task_id)}
-                                                    title="删除记录"
-                                                >
-                                                    <Trash2 size={14} /> 删除
-                                                </button>
-                                            )}
+                                                {(task.status === 'running' || task.status === 'pending') && (
+                                                    <button
+                                                        className="tm-action-btn stop"
+                                                        disabled={stoppingId === task.task_id}
+                                                        onClick={(e) => handleStopTask(e, task.task_id)}
+                                                        title="强制终止"
+                                                    >
+                                                        <StopCircle size={16} /> 终止
+                                                    </button>
+                                                )}
+                                                {task.status !== 'running' && (
+                                                    <button
+                                                        className="tm-action-btn delete"
+                                                        onClick={(e) => handleDeleteTask(e, task.task_id)}
+                                                        title="删除记录"
+                                                    >
+                                                        <Trash2 size={14} /> 删除
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))

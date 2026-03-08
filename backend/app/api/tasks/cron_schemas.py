@@ -1,10 +1,11 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
+import uuid
 
 
-class CronTaskCreate(BaseModel):
+class CronTaskBase(BaseModel):
     """
-    创建定时任务的请求模型
+    定时任务部分基础共享属性
     """
     spider_id: int = Field(..., description="关联的爬虫 ID")
     cron_expr: str = Field(..., description="Cron 表达式，例如 '*/5 * * * *'")
@@ -12,19 +13,22 @@ class CronTaskCreate(BaseModel):
     enabled: bool = Field(True, description="是否启用此调度")
     target_node_ids: Optional[List[str]] = Field(None, description="指定执行节点 ID 列表；若为空则分发到公共队列")
     timeout_seconds: int = Field(3600, description="任务执行超时时间（秒），默认1小时")
+    owner_id: Optional[uuid.UUID] = Field(None, description="归属用户ID")
 
 
-class CronTaskResponse(BaseModel):
+class CronTaskCreate(CronTaskBase):
+    """
+    创建定时任务的请求模型
+    """
+    pass
+
+
+class CronTaskResponse(CronTaskBase):
     """
     定时任务返回模型
     """
     job_id: str
-    spider_id: int
     spider_name: str = ""
-    cron_expr: str
-    description: Optional[str] = None
-    enabled: bool = True
-    target_node_ids: Optional[List[str]] = None
     next_run_time: Optional[str] = None
 
 

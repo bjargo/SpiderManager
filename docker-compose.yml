@@ -56,7 +56,7 @@ x-host-minio: &host-minio minio:9000
 # ── Master API 地址（含协议和端口）──
 # 默认 "http://master:8000" = 本文件 services.master 的容器服务名
 # 异机部署时替换为 Master 所在机器的完整地址，如: http://192.168.1.100:8000
-x-host-master-api: &host-master-api http://master:8000
+x-host-master-api: &host-master-api http://host.docker.internal:8000
 
 # ============================
 # 凭据定义（单一事实来源）
@@ -136,8 +136,9 @@ x-common-env:
 
   # ── APScheduler 调度器配置 ──
   # 用于定时任务（Cron Job），仅 Master 节点启动
-  SCHEDULER_THREAD_POOL_SIZE: 20 # 调度器线程池大小
-  SCHEDULER_MAX_INSTANCES: 3 # 同一 Job 最大并发实例数
+  SCHEDULER_THREAD_POOL_SIZE: 50 # 调度器线程池大小
+  SCHEDULER_MAX_INSTANCES: 100 # 同一 Job 最大并发实例数
+  SCHEDULER_MISFIRE_GRACE_TIME: 60 # 任务触发容错时间（秒）
 
   # ── 任务状态配置 ──
   TASK_STATUS_EXPIRE_SECONDS: 604800 # 任务状态在 Redis 中的过期时间（秒），默认 7 天

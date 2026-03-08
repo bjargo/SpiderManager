@@ -246,11 +246,20 @@
     line-height: 1.5;
 }
 
+.tm-id-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .tm-spider {
+    font-weight: 500;
+}
+
+.tm-spider-wrapper {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-weight: 500;
 }
 
 .tm-node {

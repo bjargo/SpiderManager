@@ -2,18 +2,20 @@ import json
 import logging
 from datetime import datetime
 
-from app.common.timezone import now as now_tz
+from app.core.timezone import now as now_tz
 from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from app.common.redis import get_redis
+from app.core.audit.service import audit_log
+
+from app.core.redis import get_redis
 from app.api.nodes.schemas import NodeStatus, NodeConfigUpdate
-from app.common.schemas.api_response import ApiResponse
+from app.core.schemas.api_response import ApiResponse
 from app.api.users.models import User
-from app.common.dependencies import require_viewer, require_developer, require_admin
+from app.core.dependencies import require_viewer, require_developer, require_admin
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -104,9 +106,11 @@ async def get_nodes(
     return ApiResponse.success(data=nodes)
 
 @router.post("/{node_id}/config", response_model=ApiResponse)
+@audit_log(action="UPDATE", resource_type="node")
 async def update_node_config(
     node_id: str,
     body: NodeConfigUpdate,
+    background_tasks: BackgroundTasks,
     redis: Redis = Depends(get_redis),
     operator: User = Depends(require_admin),
 ):
@@ -128,8 +132,10 @@ async def update_node_config(
         return ApiResponse.error(code=500, message="保存节点配置失败 (Redis异常)")
 
 @router.post("/{node_id}/delete", response_model=ApiResponse)
+@audit_log(action="DELETE", resource_type="node")
 async def uninstall_node(
     node_id: str,
+    background_tasks: BackgroundTasks,
     redis: Redis = Depends(get_redis),
     operator: User = Depends(require_admin),
 ):

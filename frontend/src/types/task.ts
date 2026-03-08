@@ -24,6 +24,7 @@ export interface SpiderTaskOut {
     created_at: string;
     started_at: string | null;
     finished_at: string | null;
+    is_deleted?: boolean;
 }
 
 export interface TaskListParams {

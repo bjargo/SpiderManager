@@ -337,7 +337,9 @@ export default function ProjectManagementView() {
                             {projects.map(p => (
                                 <tr key={p.project_id}>
                                     <td>
-                                        <span className="pm-project-name">{p.name}</span>
+                                        <span className="pm-project-name">
+                                            {p.name}
+                                        </span>
                                         <div className="pm-project-id mono-sm">{p.project_id}</div>
                                     </td>
                                     <td><span className="pm-desc">{p.description || '-'}</span></td>

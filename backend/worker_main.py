@@ -3,7 +3,7 @@ import logging
 import signal
 import sys
 
-from app.common.redis import redis_manager
+from app.core.redis import redis_manager
 from app.worker.heartbeat import start_heartbeat_task
 from app.worker.executor import start_task_listener
 

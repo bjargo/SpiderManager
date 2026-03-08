@@ -2,7 +2,7 @@ from sqlmodel import SQLModel, Field
 from datetime import datetime
 from typing import Optional
 
-from app.common.timezone import now
+from app.core.timezone import now
 
 class SystemLog(SQLModel, table=True):
     __tablename__ = "system_logs"

@@ -203,6 +203,8 @@
 .sv-spider-name {
     font-weight: 600;
     color: #fff;
+    display: inline-flex;
+    align-items: center;
 }
 
 .sv-source-url {

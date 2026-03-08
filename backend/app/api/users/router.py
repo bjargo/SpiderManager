@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.users.auth import fastapi_users, auth_backend
 from app.api.users.schemas import UserRead, UserCreate, UserUpdate
 from app.api.users.models import User
-from app.common.dependencies import require_admin
+from app.core.dependencies import require_admin
 from app.db.database import get_async_session
-from app.common.schemas.api_response import ApiResponse
+from app.core.schemas.api_response import ApiResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

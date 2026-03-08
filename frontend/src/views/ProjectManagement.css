@@ -120,6 +120,8 @@
 .pm-project-name {
     font-weight: 500;
     color: var(--text-primary);
+    display: inline-flex;
+    align-items: center;
 }
 
 .pm-project-id {

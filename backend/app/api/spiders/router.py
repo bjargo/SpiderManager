@@ -7,9 +7,9 @@ import logging
 from typing import List
 from datetime import datetime
 
-from app.common.timezone import now
+from app.core.timezone import now
 
-from fastapi import APIRouter, Depends, Query, Path, HTTPException, status, UploadFile, File, Request
+from fastapi import APIRouter, Depends, Query, Path, HTTPException, status, UploadFile, File, Request, BackgroundTasks
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,15 +20,15 @@ from app.api.spiders.schemas import (
     SpiderFileCreate, SpiderFileDelete,
     SpiderTaskOut, TaskLogOut,
 )
-from app.api.tasks.models import SpiderTask
-from app.api.tasks.task_log_models import TaskLog
+from app.api.tasks.models import SpiderTask, TaskLog
 from app.api.users.models import User
 from app.db.database import get_async_session
-from app.common.redis import get_redis
-from app.common.schemas.api_response import ApiResponse
-from app.common.storage.minio_client import minio_manager
-from app.common.dependencies import require_viewer, require_developer, verify_resource_owner
-from app.api.audit.service import record_audit_log
+from app.core.redis import get_redis
+from app.core.schemas.api_response import ApiResponse
+from app.core.storage.minio_client import minio_manager
+from app.core.dependencies import require_viewer, require_developer, verify_resource_owner
+from app.core.audit.service import audit_log
+from app.core.enums import UserRole
 from config import settings
 
 import zipfile
@@ -59,9 +59,10 @@ async def upload_spider_zip(file: UploadFile = File(...)):
 
 
 @router.post("", response_model=ApiResponse[SpiderOut], summary="创建爬虫")
+@audit_log(action="CREATE", resource_type="spider")
 async def create_spider(
     spider_in: SpiderCreate,
-    request: Request,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
 ):
@@ -80,16 +81,6 @@ async def create_spider(
     session.add(db_spider)
     await session.flush()  # 获取自增 id，用于审计日志
 
-    await record_audit_log(
-        session=session,
-        operator=operator,
-        action="CREATE",
-        resource_type="spider",
-        resource_id=str(db_spider.id),
-        new_value=json.dumps({"name": db_spider.name, "command": db_spider.command}, ensure_ascii=False),
-        status_code=200,
-        request=request,
-    )
     await session.commit()
     await session.refresh(db_spider)
     return ApiResponse.success(data=db_spider)
@@ -102,7 +93,9 @@ async def read_spiders(
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_viewer),
 ):
-    result = await session.execute(select(Spider).order_by(Spider.created_at.desc()).offset(skip).limit(limit))
+    stmt = select(Spider).where(Spider.is_deleted == False).order_by(Spider.created_at.desc()).offset(skip).limit(limit)
+        
+    result = await session.execute(stmt)
     spiders = result.scalars().all()
     return ApiResponse.success(data=list(spiders))
 
@@ -111,23 +104,25 @@ async def read_spiders(
 async def read_spider(
     spider_id: int = Path(...),
     session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_viewer),
 ):
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
     return ApiResponse.success(data=spider)
 
 
 @router.post("/{spider_id}/update", response_model=ApiResponse[SpiderOut], summary="更新爬虫信息")
+@audit_log(action="UPDATE", resource_type="spider")
 async def update_spider(
     spider_in: SpiderUpdate,
-    request: Request,
+    background_tasks: BackgroundTasks,
     spider_id: int = Path(...),
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
 ):
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
 
     verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
@@ -150,49 +145,30 @@ async def update_spider(
 
     session.add(spider)
 
-    await record_audit_log(
-        session=session,
-        operator=operator,
-        action="UPDATE",
-        resource_type="spider",
-        resource_id=str(spider_id),
-        original_value=original_snapshot,
-        new_value=json.dumps(update_data, default=str, ensure_ascii=False),
-        status_code=200,
-        request=request,
-    )
     await session.commit()
     await session.refresh(spider)
     return ApiResponse.success(data=spider)
 
 
 @router.post("/{spider_id}/delete", response_model=ApiResponse, summary="删除爬虫")
+@audit_log(action="DELETE", resource_type="spider")
 async def delete_spider(
-    request: Request,
+    background_tasks: BackgroundTasks,
     spider_id: int = Path(...),
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
 ):
 
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
         
     # 校验所有权
     verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
     
-    await session.delete(spider)
+    spider.is_deleted = True
+    session.add(spider)
     
-    await record_audit_log(
-        session=session,
-        operator=operator,
-        action="DELETE",
-        resource_type="spider",
-        resource_id=str(spider_id),
-        original_value=json.dumps({"name": spider.name, "command": spider.command}, ensure_ascii=False),
-        status_code=200,
-        request=request,
-    )
     await session.commit()
     return ApiResponse.success(message="Spider deleted successfully")
 
@@ -235,7 +211,7 @@ async def list_spider_files(
     session: AsyncSession = Depends(get_async_session),
 ):
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
     if spider.source_type != "MINIO":
         raise HTTPException(status_code=400, detail="仅支持 MINIO 类型爬虫的代码查看")
@@ -266,7 +242,7 @@ async def read_spider_file(
     session: AsyncSession = Depends(get_async_session),
 ):
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
     if spider.source_type != "MINIO":
         raise HTTPException(status_code=400, detail="仅支持 MINIO 类型爬虫的代码查看")
@@ -295,9 +271,10 @@ async def read_spider_file(
 
 
 @router.post("/{spider_id}/file", response_model=ApiResponse, summary="保存修改后的文件到爬虫 ZIP 包")
+@audit_log(action="UPDATE", resource_type="spider")
 async def save_spider_file(
     body: SpiderFileSave,
-    request: Request,
+    background_tasks: BackgroundTasks,
     spider_id: int = Path(...),
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
@@ -305,7 +282,7 @@ async def save_spider_file(
     _check_protected_file(body.path)
 
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
     if spider.source_type != "MINIO":
         raise HTTPException(status_code=400, detail="仅支持 MINIO 类型爬虫的代码修改")
@@ -343,16 +320,6 @@ async def save_spider_file(
     spider.updated_at = now()
     session.add(spider)
 
-    await record_audit_log(
-        session=session,
-        operator=operator,
-        action="UPDATE_FILE",
-        resource_type="spider",
-        resource_id=str(spider_id),
-        new_value=json.dumps({"file_path": body.path, "spider_name": spider.name}, ensure_ascii=False),
-        status_code=200,
-        request=request,
-    )
     await session.commit()
 
     return ApiResponse.success(message="文件保存成功")
@@ -365,9 +332,10 @@ def _validate_file_path(path: str) -> None:
 
 
 @router.post("/{spider_id}/file/create", response_model=ApiResponse, summary="在爬虫 ZIP 包内新增文件")
+@audit_log(action="CREATE", resource_type="spider_file")
 async def create_spider_file(
     body: SpiderFileCreate,
-    request: Request,
+    background_tasks: BackgroundTasks,
     spider_id: int = Path(...),
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
@@ -376,7 +344,7 @@ async def create_spider_file(
     _validate_file_path(body.path)
 
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
     if spider.source_type != "MINIO":
         raise HTTPException(status_code=400, detail="仅支持 MINIO 类型爬虫的代码修改")
@@ -415,16 +383,6 @@ async def create_spider_file(
     spider.updated_at = now()
     session.add(spider)
 
-    await record_audit_log(
-        session=session,
-        operator=operator,
-        action="CREATE_FILE",
-        resource_type="spider",
-        resource_id=str(spider_id),
-        new_value=json.dumps({"file_path": body.path, "spider_name": spider.name}, ensure_ascii=False),
-        status_code=200,
-        request=request,
-    )
     await session.commit()
 
     # 返回更新后的文件列表
@@ -439,9 +397,10 @@ async def create_spider_file(
 
 
 @router.post("/{spider_id}/file/delete", response_model=ApiResponse, summary="从爬虫 ZIP 包内删除文件")
+@audit_log(action="DELETE", resource_type="spider_file")
 async def delete_spider_file(
     body: SpiderFileDelete,
-    request: Request,
+    background_tasks: BackgroundTasks,
     spider_id: int = Path(...),
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
@@ -450,7 +409,7 @@ async def delete_spider_file(
     _validate_file_path(body.path)
 
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
     if spider.source_type != "MINIO":
         raise HTTPException(status_code=400, detail="仅支持 MINIO 类型爬虫的代码修改")
@@ -487,16 +446,6 @@ async def delete_spider_file(
     spider.updated_at = now()
     session.add(spider)
 
-    await record_audit_log(
-        session=session,
-        operator=operator,
-        action="DELETE_FILE",
-        resource_type="spider",
-        resource_id=str(spider_id),
-        original_value=json.dumps({"file_path": body.path, "spider_name": spider.name}, ensure_ascii=False),
-        status_code=200,
-        request=request,
-    )
     await session.commit()
 
     # 返回更新后的文件列表
@@ -511,9 +460,10 @@ async def delete_spider_file(
 
 
 @router.post("/{spider_id}/run", response_model=ApiResponse, summary="触发爬虫运行")
+@audit_log(action="RUN", resource_type="spider")
 async def run_spider(
     body: SpiderRunRequest,
-    request: Request,
+    background_tasks: BackgroundTasks,
     spider_id: int = Path(...),
     session: AsyncSession = Depends(get_async_session),
     redis: Redis = Depends(get_redis),
@@ -524,7 +474,7 @@ async def run_spider(
     指定 target_nodes 时分发到各节点专属队列，否则投放公共队列。
     """
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
         
     verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
@@ -537,6 +487,7 @@ async def run_spider(
         "project_id": spider.project_id,
         "source_type": spider.source_type,
         "source_url": spider.source_url,
+        "language": spider.language or "default",   # 显式传递 default 触发 executor 容器模式
         "script_path": spider.command,          # executor 用 script_path 作为子进程命令
         "timeout_seconds": body.timeout_seconds or 3600,
     }
@@ -550,24 +501,6 @@ async def run_spider(
         command=spider.command,
     )
     session.add(db_task)
-
-    # ── 记录审计日志：运行爬虫 ──
-    await record_audit_log(
-        session=session,
-        operator=operator,
-        action="RUN",
-        resource_type="spider",
-        resource_id=str(spider_id),
-        new_value=json.dumps({
-            "task_id": task_id,
-            "spider_name": spider.name,
-            "command": spider.command,
-            "target_nodes": body.target_nodes,
-            "timeout_seconds": body.timeout_seconds or 3600,
-        }, default=str, ensure_ascii=False),
-        status_code=200,
-        request=request,
-    )
     await session.commit()
 
     # ── 路由到正确的 Redis 队列 ──
@@ -602,18 +535,16 @@ async def list_spider_tasks(
     operator: User = Depends(require_viewer),
 ):
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
         
-    verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
+    # 对于 admin 则不进行权限过滤，其他人需要 own
+    if operator.role != UserRole.admin:
+        verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
 
-    result = await session.execute(
-        select(SpiderTask)
-        .where(SpiderTask.spider_id == spider_id)
-        .order_by(SpiderTask.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
+    stmt = select(SpiderTask).where(SpiderTask.spider_id == spider_id, SpiderTask.is_deleted == False).order_by(SpiderTask.created_at.desc()).offset(skip).limit(limit)
+
+    result = await session.execute(stmt)
     tasks = result.scalars().all()
     return ApiResponse.success(data=list(tasks))
 
@@ -632,7 +563,7 @@ async def get_task_logs(
     operator: User = Depends(require_viewer),
 ):
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
         
     verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
@@ -656,7 +587,7 @@ async def get_spider_status(
 ):
     """返回爬虫最近一次任务的状态，若无任务返回 idle。"""
     spider = await session.get(Spider, spider_id)
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
         
     verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")

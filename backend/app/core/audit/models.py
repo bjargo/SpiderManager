@@ -11,7 +11,7 @@ from typing import Optional
 from datetime import datetime
 from sqlmodel import SQLModel, Field
 
-from app.common.timezone import now
+from app.core.timezone import now
 
 
 class AuditLog(SQLModel, table=True):
@@ -70,6 +70,11 @@ class AuditLog(SQLModel, table=True):
     status_code: int = Field(
         nullable=False,
         description="操作对应的 HTTP 响应状态码",
+    )
+    user_agent: Optional[str] = Field(
+        default=None,
+        max_length=256,
+        description="User-Agent",
     )
 
     # 时间（只写，记录后不可修改）

@@ -6,7 +6,7 @@ from fastapi import HTTPException, status
 
 from app.api.spiders.models import Spider
 from app.api.spiders.schemas import SpiderCreate, SpiderUpdate
-from app.common.timezone import now
+from app.core.timezone import now
 
 class SpiderService:
     @staticmethod

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarClock, Plus, Trash2, Pencil, X, Loader2, Clock, Bug, Server } from 'lucide-react';
+import { CalendarClock, Plus, Trash2, Pencil, X, Loader2, Clock, Bug, Server, Filter } from 'lucide-react';
 import { fetchCronTasks, addCronTask, deleteCronTask, updateCronTask, toggleCronTask } from '@/api/scheduler';
 import { fetchSpiderList } from '@/api/spider';
 import { fetchNodeList } from '@/api/node';
@@ -358,6 +358,11 @@ export default function Scheduler() {
     const [nodes, setNodes] = useState<SpiderNode[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // 筛选状态
+    const [filterProjectId, setFilterProjectId] = useState('');
+    const [filterSpiderId, setFilterSpiderId] = useState('');
+    const [filterNodeId, setFilterNodeId] = useState('');
+
     // 弹层状态
     const [modalState, setModalState] = useState<{ visible: boolean; mode: ModalMode; target: CronTaskResponse | null }>({
         visible: false, mode: 'create', target: null,
@@ -406,6 +411,53 @@ export default function Scheduler() {
         loadNodes();
         loadProjects();
     }, [loadTasks, loadSpiders, loadNodes, loadProjects]);
+
+    // 根据项目过滤爬虫列表
+    const filteredSpiders = useMemo(() => {
+        if (!filterProjectId) return spiders;
+        return spiders.filter(s => s.project_id === filterProjectId);
+    }, [spiders, filterProjectId]);
+
+    // 项目切换时重置爬虫选择
+    const handleProjectFilterChange = (projectId: string) => {
+        setFilterProjectId(projectId);
+        setFilterSpiderId('');
+    };
+
+    // 筛选后的任务列表
+    const filteredTasks = useMemo(() => {
+        return tasks.filter(task => {
+            // 按项目筛选
+            if (filterProjectId) {
+                const spider = spiders.find(s => s.id === task.spider_id);
+                if (!spider || spider.project_id !== filterProjectId) {
+                    return false;
+                }
+            }
+            // 按爬虫筛选
+            if (filterSpiderId) {
+                if (task.spider_id.toString() !== filterSpiderId) {
+                    return false;
+                }
+            }
+            // 按节点筛选
+            if (filterNodeId) {
+                // 特殊值：公共队列
+                if (filterNodeId === '__public__') {
+                    const targetNodes = task.target_node_ids || [];
+                    if (targetNodes.length > 0) {
+                        return false;
+                    }
+                } else {
+                    const targetNodes = task.target_node_ids || [];
+                    if (!targetNodes.includes(filterNodeId)) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        });
+    }, [tasks, spiders, filterProjectId, filterSpiderId, filterNodeId]);
 
     const handleToggle = async (task: CronTaskResponse, newEnabled: boolean) => {
         setTogglingJobs(prev => new Set(prev).add(task.job_id));
@@ -459,11 +511,67 @@ export default function Scheduler() {
             <div className="sch-header glass-panel">
                 <div className="sch-header-left">
                     <h2><CalendarClock size={20} /> 定时调度中心</h2>
-                    <span className="sch-count">{tasks.length} 个调度</span>
+                    <span className="sch-count">{filteredTasks.length} / {tasks.length} 个调度</span>
                 </div>
-                <button className="sch-btn sch-btn-primary" onClick={openCreate}>
-                    <Plus size={15} /> 新增调度
-                </button>
+                <div className="sch-header-actions">
+                    {/* 筛选区域 */}
+                    <div className="sch-filter-bar">
+                        <div className="sch-filter-item">
+                            <CalendarClock size={14} />
+                            <select
+                                className="sch-filter-select"
+                                value={filterProjectId}
+                                onChange={e => handleProjectFilterChange(e.target.value)}
+                            >
+                                <option value="">全部项目</option>
+                                {projects.map(project => (
+                                    <option key={project.project_id} value={project.project_id}>
+                                        {project.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="sch-filter-item">
+                            <Bug size={14} />
+                            <select
+                                className="sch-filter-select"
+                                value={filterSpiderId}
+                                onChange={e => setFilterSpiderId(e.target.value)}
+                            >
+                                <option value="">全部爬虫</option>
+                                {filteredSpiders.map(spider => (
+                                    <option key={spider.id} value={spider.id.toString()}>
+                                        {spider.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="sch-filter-item">
+                            <Server size={14} />
+                            <select
+                                className="sch-filter-select"
+                                value={filterNodeId}
+                                onChange={e => setFilterNodeId(e.target.value)}
+                            >
+                                <option value="">全部节点</option>
+                                <option value="__public__">公共队列</option>
+                                {nodes.map(node => (
+                                    <option key={node.node_id} value={node.node_id}>
+                                        {node.name || node.node_id.substring(0, 8)} ({node.status === 'online' ? '在线' : '离线'})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        {(filterProjectId || filterSpiderId || filterNodeId) && (
+                            <button className="sch-filter-reset" onClick={() => { setFilterProjectId(''); setFilterSpiderId(''); setFilterNodeId(''); }}>
+                                <Filter size={12} /> 重置
+                            </button>
+                        )}
+                    </div>
+                    <button className="sch-btn sch-btn-primary" onClick={openCreate}>
+                        <Plus size={15} /> 新增调度
+                    </button>
+                </div>
             </div>
 
             {/* 列表 */}
@@ -477,6 +585,14 @@ export default function Scheduler() {
                     <div className="sch-empty">
                         <CalendarClock size={48} strokeWidth={1} />
                         <p>暂无调度任务，点击右上角「新增调度」添加</p>
+                    </div>
+                ) : filteredTasks.length === 0 ? (
+                    <div className="sch-empty">
+                        <Filter size={48} strokeWidth={1} />
+                        <p>未找到匹配的调度任务</p>
+                        <button className="sch-btn sch-btn-ghost" onClick={() => { setFilterProjectId(''); setFilterSpiderId(''); setFilterNodeId(''); }}>
+                            清除筛选条件
+                        </button>
                     </div>
                 ) : (
                     <table className="sch-table">
@@ -492,7 +608,7 @@ export default function Scheduler() {
                             </tr>
                         </thead>
                         <tbody>
-                            {tasks.map(task => (
+                            {filteredTasks.map(task => (
                                 <tr key={task.job_id} className={!task.enabled ? 'row-disabled' : ''}>
                                     <td>
                                         <div className="sch-spider-cell"

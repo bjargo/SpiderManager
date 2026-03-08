@@ -7,7 +7,7 @@ from typing import Optional
 from datetime import datetime
 from sqlmodel import SQLModel, Field
 
-from app.common.timezone import now
+from app.core.timezone import now
 
 
 class Project(SQLModel, table=True):
@@ -25,6 +25,9 @@ class Project(SQLModel, table=True):
         index=True,
         description="资源所有者 ID（关联 users.id），用于非 Admin 用户的所有权校验",
     )
+
+    # 软删除标记
+    is_deleted: bool = Field(default=False, description="软删除标记，True 表示已删除")
 
     created_at: datetime = Field(default_factory=now)
     updated_at: datetime = Field(default_factory=now)

@@ -8,8 +8,8 @@ from typing import Dict, Any
 from redis.exceptions import RedisError, ConnectionError, TimeoutError
 import json
 
-from app.common.redis import redis_manager
-from app.common.timezone import now
+from app.core.redis import redis_manager
+from app.core.timezone import now
 from config import settings
 
 logger = logging.getLogger(__name__)

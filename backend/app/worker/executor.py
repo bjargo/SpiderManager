@@ -5,17 +5,20 @@ import threading
 import asyncio
 import json
 import logging
+import hashlib
 import time
 from typing import Dict, Any, List
 from datetime import datetime
 
-from app.common import timezone
+from app.core import timezone
 
 from redis.exceptions import RedisError, ConnectionError, TimeoutError
-from app.common.redis import redis_manager
+from app.core.redis import redis_manager
 from app.worker.heartbeat import NODE_ID
 from app.worker.project_loader import load_project
 from app.worker.docker_manager import DockerManager
+from app.core.source.factory import SourceFactory
+from app.core.container.image_manager import image_manager
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -62,7 +65,7 @@ async def _flush_logs(task_id: str, log_buffer: List[str]) -> None:
         return
     try:
         from app.db.database import async_session_maker
-        from app.api.tasks.task_log_models import TaskLog
+        from app.api.tasks.models import TaskLog
 
         async with async_session_maker() as session:
             for line in log_buffer:
@@ -96,11 +99,18 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
     容器内自动完成: 下载代码 → 解压 → 执行脚本。
     """
     task_id: str = task_data.get("task_id", "unknown")
+    project_id = task_data.get("project_id")
+    source_type = task_data.get("source_type")
+    source_url = task_data.get("source_url")
+    script_path = task_data.get("script_path")
+    language = task_data.get("language")
+
     status_key = f"task:status:{task_id}:{NODE_ID}" if NODE_ID else f"task:status:{task_id}:public"
     channel = f"log:channel:{task_id}"
     log_buffer: List[str] = []
     last_flush_time = time.time()
     container_name = f"spider-task-{task_id[:16]}"
+    project_dir: str | None = None
 
     docker_mgr = DockerManager()
 
@@ -110,15 +120,92 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
         if redis_manager.client:
             running_status = {"task_id": task_id, "status": "running", "node_id": NODE_ID, "start_time": time.time()}
             await redis_manager.client.set(status_key, json.dumps(running_status), ex=7 * 24 * 3600)
-            await redis_manager.client.publish(channel, f"[SYSTEM: Launching container for task {task_id}]")
+            await redis_manager.client.publish(channel, f"[SYSTEM: Preparing container build for task {task_id}]")
 
-        # 2. 启动容器
+        # 2. 预编译镜像流程 (Remote Fingerprint -> Cache Check -> Build)
+        try:
+            handler = SourceFactory.get_handler(source_type)
+            version_hash: str | None = None
+            cached_image_tag: str | None = None
+            
+            # ── 2a. 尝试远程指纹探测 (Remote Probing) ──
+            try:
+                # 获取任务自带的构建参数 (包含 branch 等信息)
+                source_kwargs = task_data.get("source_kwargs", {})
+                remote_fingerprint = await asyncio.to_thread(handler.get_remote_fingerprint, source_url, **source_kwargs)
+                
+                if remote_fingerprint:
+                    version_hash = remote_fingerprint  # 复用远程指纹，消除冗余哈希 [ZERO-DOWNLOAD]
+                    
+                    # 提前计算镜像标签
+                    script_hash = hashlib.sha256(script_path.encode()).hexdigest()[:8]
+                    predict_tag = f"spider-{project_id}-{language.replace(':', '-')}:{version_hash[:12]}-{script_hash}"
+                    
+                    if redis_manager.client:
+                        await redis_manager.client.publish(channel, f"[SYSTEM: Remote fingerprint detected: {version_hash[:12]}]")
+                    
+                    # 检查镜像是否存在 (Cache Hit)
+                    if await asyncio.to_thread(image_manager.check_image_exists, predict_tag):
+                        cached_image_tag = predict_tag
+                        if redis_manager.client:
+                            await redis_manager.client.publish(channel, f"[SYSTEM: Zero-Download Cache Hit! Image {cached_image_tag} found.]")
+                        logger.info("Zero-Download Cache Hit for task %s: image %s found.", task_id, cached_image_tag)
+            except Exception as probe_err:
+                logger.warning("Remote fingerprint probe failed for task %s: %s. Falling back to download mode.", task_id, probe_err)
+                if redis_manager.client:
+                    await redis_manager.client.publish(channel, f"[SYSTEM: Remote probe failed: {probe_err}. Falling back...]")
+
+            # ── 2b. 执行构建 (仅在 Cache Miss 或 Probe 失败时) ──
+            if not cached_image_tag:
+                # 下载源码到临时目录
+                project_dir = await load_project(task_id, source_type, source_url)
+
+                # 如果探测失败或未获取到远程指纹，则回退到本地递归哈希扫描
+                if not version_hash:
+                    version_hash = await asyncio.to_thread(handler.get_version_hash, project_dir)
+
+                # 组合最终标签
+                script_hash = hashlib.sha256(script_path.encode()).hexdigest()[:8]
+                image_tag = f"spider-{project_id}-{language.replace(':', '-')}:{version_hash[:12]}-{script_hash}"
+                
+                if redis_manager.client:
+                    await redis_manager.client.publish(channel, f"[SYSTEM: Source Hash: {version_hash[:12]}, Image Tag: {image_tag}]")
+                    await redis_manager.client.publish(channel, f"[SYSTEM: Building image...]")
+                
+                build_args = task_data.get("build_args", {})
+                
+                # 构建镜像
+                final_image_tag = await asyncio.to_thread(
+                    image_manager.build_image,
+                    local_path=project_dir,
+                    language=language,
+                    image_tag=image_tag,
+                    entrypoint=script_path,
+                    build_args=build_args
+                )
+                task_data["image_tag"] = final_image_tag
+            else:
+                # 直接使用缓存项
+                task_data["image_tag"] = cached_image_tag
+            
+            if redis_manager.client:
+                await redis_manager.client.publish(channel, f"[SYSTEM: Image {task_data.get('image_tag')} ready. Launching container...]")
+
+        except Exception as build_err:
+            error_msg = f"Build Failed: {build_err}"
+            logger.error("Failed to prepare image for task %s: %s", task_id, error_msg)
+            if redis_manager.client:
+                await redis_manager.client.publish(channel, f"[SYSTEM: {error_msg}]")
+            await _flush_logs(task_id, [f"[SYSTEM: {error_msg}]"])
+            raise RuntimeError(error_msg)
+
+        # 3. 启动容器
         container = await asyncio.to_thread(docker_mgr.run_spider_container, task_data)
 
         if redis_manager.client:
-            await redis_manager.client.publish(channel, f"[SYSTEM: Container {container.short_id} started, image={task_data.get('language')}]")
+            await redis_manager.client.publish(channel, f"[SYSTEM: Container {container.short_id} started, using image {task_data.get('image_tag')}]")
 
-        # 3. 流式读取容器日志
+        # 4. 流式读取容器日志
         log_stream = await asyncio.to_thread(
             docker_mgr.get_container_logs, container_name, stream=True, follow=True
         )
@@ -196,11 +283,13 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                 logger.info("Task %s container finished successfully.", task_id)
                 if redis_manager.client:
                     await redis_manager.client.publish(channel, "[SYSTEM: Task Finished Successfully]")
+                await _flush_logs(task_id, ["[SYSTEM: Task Finished Successfully]"])
             else:
                 final_status = "failed"
                 logger.error("Task %s container exited with code %s.", task_id, return_code)
                 if redis_manager.client:
                     await redis_manager.client.publish(channel, f"[SYSTEM: Task Failed with code {return_code}]")
+                await _flush_logs(task_id, [f"[SYSTEM: Task Failed with code {return_code}]"])
 
         # Flush 剩余日志
         if log_buffer:
@@ -232,13 +321,24 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
             error_status = {"task_id": task_id, "status": "error", "node_id": NODE_ID, "error_detail": str(e)}
             await redis_manager.client.set(status_key, json.dumps(error_status), ex=7 * 24 * 3600)
             await redis_manager.client.publish(channel, f"[SYSTEM: Task failed with unexpected error: {e}]")
-
+        
+        # 确保关键错误也被记录到 TaskLog 表中
+        await _flush_logs(task_id, [f"[SYSTEM: Unexpected error: {e}]"])
         await _update_task_status(task_id, "error", error_detail=str(e), finished_at=timezone.now())
 
     finally:
-        # 显式清理容器（即使 auto_remove=True，有时 docker-py 也不会彻底清理退出码非 0 的容器，或者进程被外界 kill 时）
+        # 显式清理容器
         await asyncio.to_thread(docker_mgr.remove_container, container_name, force=True)
-        docker_mgr.close()
+        # 异步关闭 Docker 客户端
+        await asyncio.to_thread(docker_mgr.close)
+        
+        # 显式清理为了构建镜像临时下载的源码目录 (同步 IO 放入线程)
+        if project_dir and os.path.exists(project_dir):
+            try:
+                await asyncio.to_thread(shutil.rmtree, project_dir)
+                logger.info("Cleanup: Removed build context directory %s for task %s", project_dir, task_id)
+            except Exception as e:
+                logger.error("Cleanup Warning: Failed to fully remove build context directory %s: %s", project_dir, e)
 
 
 async def execute_task(task_data: Dict[str, Any]) -> None:
@@ -285,13 +385,33 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
         # 2. 动态加载代码
         try:
             project_dir = await load_project(task_id, source_type, source_url)
-            if redis_manager.client:
-                await redis_manager.client.publish(channel, f"[SYSTEM: Environment prepared at {project_dir}]")
         except Exception as e:
             logger.error("Failed to load project %s for task %s: %s", project_id, task_id, e)
             if redis_manager.client:
                 await redis_manager.client.publish(channel, f"[SYSTEM: Failed to load project code: {e}]")
             raise
+
+        # 2.3 自动打平目录结构 (针对子进程模式)
+        try:
+            flattened_dir = await asyncio.to_thread(image_manager._flatten_directory, project_dir)
+            if flattened_dir and script_path:
+                # 修正 script_path
+                parts = script_path.split()
+                new_parts = []
+                prefix = f"{flattened_dir}/"
+                for p in parts:
+                    if p.startswith(prefix):
+                        new_parts.append(p[len(prefix):])
+                    elif p == flattened_dir:
+                        new_parts.append(".")
+                    else:
+                        new_parts.append(p)
+                new_script_path = " ".join(new_parts)
+                if new_script_path != script_path:
+                    logger.info("Adjusted subprocess script_path from '%s' to '%s' due to flattening.", script_path, new_script_path)
+                    script_path = new_script_path
+        except Exception as e:
+            logger.warning("Failed to flatten directory in subprocess mode: %s", e)
 
         # 2.5 校验脚本文件是否存在（防御空目录 / 下载失败的场景）
         # script_path 形如 "python main.py"，提取实际的文件名部分
@@ -406,11 +526,13 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
                     final_status = "success"
                     if redis_manager.client:
                         await redis_manager.client.publish(channel, "[SYSTEM: Task Finished Successfully]")
+                    await _flush_logs(task_id, ["[SYSTEM: Task Finished Successfully]"])
                 else:
                     logger.error("Task %s failed with code %s.", task_id, return_code)
                     final_status = "failed"
                     if redis_manager.client:
                         await redis_manager.client.publish(channel, f"[SYSTEM: Task Failed with code {return_code}]")
+                    await _flush_logs(task_id, [f"[SYSTEM: Task Failed with code {return_code}]"])
 
         except asyncio.TimeoutError:
             logger.warning("Task %s timed out after %s seconds. Killing process...", task_id, timeout)
@@ -471,7 +593,7 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
         # 4. 彻底清理临时代码目录，防止磁盘爆满
         if project_dir and os.path.exists(project_dir):
             try:
-                shutil.rmtree(project_dir)
+                await asyncio.to_thread(shutil.rmtree, project_dir)
                 logger.info("Cleanup: Removed project directory %s for task %s", project_dir, task_id)
             except Exception as e:
                 logger.error("Cleanup Warning: Failed to fully remove project directory %s: %s", project_dir, e)

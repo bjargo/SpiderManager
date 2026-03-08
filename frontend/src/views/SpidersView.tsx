@@ -181,8 +181,35 @@ function SpiderDrawer({ mode, initial, onClose, onSaved, showToast, projects }: 
 
     // 公共字段
     const [name, setName] = useState(initial?.name ?? '');
+    const [language, setLanguage] = useState(initial?.language ?? 'python:3.11-slim');
     const [command, setCommand] = useState(initial?.command ?? '');
     const [projectId, setProjectId] = useState(initial?.project_id ?? (projects.length > 0 ? projects[0].project_id : 'default'));
+
+    // 预设语言选项及默认命令
+    const languageOptions: OptionItem[] = [
+        { label: 'Python 3.11', value: 'python:3.11-slim' },
+        { label: 'Node.js 18', value: 'nodejs:18-slim' },
+        { label: 'Golang 1.21', value: 'golang:1.21-alpine' },
+        { label: '系统默认环境', value: 'default' },
+    ];
+
+    const defaultCommands: Record<string, string> = {
+        'python:3.11-slim': 'main.py',
+        'nodejs:18-slim': 'index.js',
+        'golang:1.21-alpine': 'main.go',
+        'default': 'run.sh',
+    };
+
+    // 语言改变时，如果当前 command 为空或者是之前语言的默认 command，则自动填充
+    const handleLanguageChange = (newLang: string) => {
+        const oldDefault = defaultCommands[language];
+        const newDefault = defaultCommands[newLang] || '';
+
+        if (!command.trim() || command.trim() === oldDefault) {
+            setCommand(newDefault);
+        }
+        setLanguage(newLang);
+    };
 
     // MinIO 字段
     const [file, setFile] = useState<File | null>(null);
@@ -281,6 +308,7 @@ function SpiderDrawer({ mode, initial, onClose, onSaved, showToast, projects }: 
 
                 const payload: SpiderCreatePayload = {
                     name: name.trim(),
+                    language: language,
                     command: command.trim() || undefined,
                     project_id: projectId,
                     source_type: sourceType,
@@ -296,6 +324,7 @@ function SpiderDrawer({ mode, initial, onClose, onSaved, showToast, projects }: 
             } else if (initial) {
                 const res = await updateSpider(initial.id, {
                     name: name.trim(),
+                    language: language,
                     command: command.trim() || undefined,
                     project_id: projectId,
                 });
@@ -456,12 +485,20 @@ function SpiderDrawer({ mode, initial, onClose, onSaved, showToast, projects }: 
                         />
                     </div>
                     <div className="sv-field">
-                        <label>启动命令（可选）</label>
+                        <label>运行环境 (Language) *</label>
+                        <CustomSelect
+                            value={language}
+                            onChange={handleLanguageChange}
+                            options={languageOptions}
+                        />
+                    </div>
+                    <div className="sv-field">
+                        <label>启动命令（可选，入口文件即可）</label>
                         <input
                             type="text"
                             value={command}
                             onChange={e => setCommand(e.target.value)}
-                            placeholder="例如：python main.py"
+                            placeholder="例如：main.py"
                         />
                     </div>
                 </div>
@@ -754,10 +791,17 @@ export default function SpidersView() {
                                     key={s.id}
                                     id={`spider-row-${s.id}`}
                                     className={highlightId === s.id ? 'highlight-row' : ''}
-                                    style={highlightId === s.id ? { backgroundColor: 'rgba(56, 189, 248, 0.15)', transition: 'background-color 0.5s' } : { transition: 'background-color 0.5s' }}
+                                    style={{
+                                        transition: 'background-color 0.5s',
+                                        backgroundColor: highlightId === s.id
+                                            ? 'rgba(56, 189, 248, 0.15)'
+                                            : 'transparent'
+                                    }}
                                 >
                                     <td>
-                                        <span className="sv-spider-name">{s.name}</span>
+                                        <span className="sv-spider-name">
+                                            {s.name}
+                                        </span>
                                         {s.command && (
                                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2, fontFamily: 'monospace' }}>
                                                 $ {s.command}

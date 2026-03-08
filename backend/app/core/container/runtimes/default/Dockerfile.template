@@ -1,0 +1,8 @@
+FROM alpine:latest
+RUN addgroup -S spider && adduser -S spider -G spider -h /work
+WORKDIR /work
+COPY . .
+RUN find . -maxdepth 2 -not -path '*/.*'
+RUN chown -R spider:spider /work
+USER spider
+CMD ["sh", "-c", "{{ entrypoint }}"]

@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.redis import get_redis
+from app.core.redis import get_redis
 from app.db.database import get_async_session
-from app.common.schemas.api_response import ApiResponse
+from app.core.schemas.api_response import ApiResponse
 from .schemas import DashboardStats, TrendData, RecentTask
 from .services import DashboardService
 

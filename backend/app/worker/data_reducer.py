@@ -22,7 +22,7 @@ from typing import Any
 from app.db.database import spider_async_engine as async_engine
 from sqlalchemy import text
 from redis.exceptions import RedisError
-from app.common.redis import redis_manager
+from app.core.redis import redis_manager
 from config import settings
 
 logger = logging.getLogger(__name__)

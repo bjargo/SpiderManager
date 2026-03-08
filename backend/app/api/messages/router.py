@@ -4,7 +4,7 @@
 from typing import List, Optional
 from datetime import datetime
 
-from app.common.timezone import now
+from app.core.timezone import now
 
 from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from sqlalchemy import select
@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.messages.models import SystemMessage
 from app.api.messages import schemas
+from app.api.users.models import User
+from app.core.dependencies import require_viewer
 from app.db.database import get_async_session
 
 router = APIRouter()
@@ -40,9 +42,15 @@ async def read_user_messages(
     user_id: int = Path(...),
     skip: int = Query(0), limit: int = Query(100),
     is_read: Optional[bool] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_viewer)
 ):
     stmt = select(SystemMessage).where(SystemMessage.receiver_id == user_id)
+    # Filter out deleted messages unless user is an admin
+    from app.core.enums import UserRole
+    if getattr(operator, "role", None) != UserRole.admin:
+        stmt = stmt.where(SystemMessage.is_deleted == False)
+
     if is_read is not None:
         stmt = stmt.where(SystemMessage.is_read == is_read)
     stmt = stmt.order_by(SystemMessage.created_at.desc()).offset(skip).limit(limit)
@@ -56,7 +64,7 @@ async def read_message(
     session: AsyncSession = Depends(get_async_session)
 ):
     msg = await session.get(SystemMessage, message_id)
-    if not msg:
+    if not msg or msg.is_deleted:
         raise HTTPException(status_code=404, detail="Message not found")
 
     msg.is_read = True
@@ -74,8 +82,9 @@ async def delete_message(
     session: AsyncSession = Depends(get_async_session)
 ):
     msg = await session.get(SystemMessage, message_id)
-    if not msg:
+    if not msg or msg.is_deleted:
         raise HTTPException(status_code=404, detail="Message not found")
-    await session.delete(msg)
+    msg.is_deleted = True
+    session.add(msg)
     await session.commit()
     return {"message": "Message deleted successfully"}

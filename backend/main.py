@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator, metrics
 
-from app.common.logger import setup_logging, bind_app
+from app.core.logger import setup_logging, bind_app
 setup_logging()
 
 from app.api.monitor.router import router as monitor_router
@@ -20,11 +20,11 @@ from app.api.spiders.router import router as spiders_router
 from app.api.users.router import router as users_router
 from app.api.dashboard.router import router as dashboard_router
 from app.api.admin.router import router as admin_router
-from app.common.redis import redis_manager
+from app.core.redis import redis_manager
 from app.core.scheduler import start_scheduler, shutdown_scheduler
 from config import settings
-from app.common.timezone import now
-from app.common.storage.minio_client import minio_manager
+from app.core.timezone import now
+from app.core.storage.minio_client import minio_manager
 from app.worker.heartbeat import start_heartbeat_task
 from app.db.database import create_tables
 from app.db.init_data import init_superuser
@@ -128,6 +128,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from app.core.middleware import AuditContextMiddleware
+app.add_middleware(AuditContextMiddleware)
+
 
 # ---- 业务路由 ----
 app.include_router(monitor_router, prefix="/api/monitor", tags=["监控"])

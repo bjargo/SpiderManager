@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status, Query, Request, BackgroundTasks
 from redis.asyncio import Redis
 from sqlalchemy import select, func, desc
 from app.db.database import get_async_session, async_session_maker
@@ -13,16 +13,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from redis.exceptions import RedisError
 from apscheduler.triggers.cron import CronTrigger
 
-from app.common.schemas.api_response import ApiResponse
-from app.common.redis import get_redis, redis_manager
+from app.core.schemas.api_response import ApiResponse
+from app.core.redis import get_redis, redis_manager
 from config import settings
 from app.api.tasks.schemas import TaskRequest, TaskListResponse, DataIngestRequest
-from app.api.tasks.models import SpiderTask
+from app.api.tasks.models import SpiderTask, TaskLog
 from app.api.tasks.cron_schemas import CronTaskCreate, CronTaskResponse, CronTaskUpdate, CronTaskToggle
 from app.api.spiders.models import Spider
 from app.api.users.models import User
-from app.common.dependencies import require_viewer, require_developer
-from app.api.audit.service import record_audit_log
+from app.core.dependencies import require_viewer, require_developer, verify_resource_owner
+from app.core.enums import UserRole
+from app.core.audit.service import audit_log
+from app.core.timezone import now
+from sqlalchemy import update as sa_update
 from app.core.scheduler import scheduler
 from app.worker.cron_jobs import dispatch_scheduled_task
 
@@ -110,8 +113,8 @@ async def get_all_tasks(
     带分页和条件过滤的任务列表查询。
     """
     try:
-        query = select(SpiderTask)
-        count_query = select(func.count()).select_from(SpiderTask)
+        query = select(SpiderTask).where(SpiderTask.is_deleted == False)
+        count_query = select(func.count()).select_from(SpiderTask).where(SpiderTask.is_deleted == False)
 
         if status_filter:
             query = query.where(SpiderTask.status == status_filter)
@@ -160,9 +163,10 @@ async def get_all_tasks(
         )
 
 @router.post("/{task_id}/stop", response_model=ApiResponse, summary="强制停止运行中的任务")
+@audit_log(action="STOP", resource_type="task")
 async def stop_task(
     task_id: str,
-    request: Request,
+    background_tasks: BackgroundTasks,
     redis: Redis = Depends(get_redis),
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
@@ -172,8 +176,6 @@ async def stop_task(
     1. 先在数据库中将状态直接置为 cancelled，确保前端能立即看到状态变化。
     2. 同时通过 Redis 下发 kill signal，通知 Worker 杀掉实际子进程。
     """
-    from sqlalchemy import update as sa_update
-
     # ── 1. 前置校验：只有 running / pending 状态才允许终止 ──
     result = await session.execute(
         select(SpiderTask).where(SpiderTask.task_id == task_id)
@@ -181,10 +183,11 @@ async def stop_task(
     task = result.scalars().first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    if task.is_deleted:
+        raise HTTPException(status_code=404, detail="Task not found")
 
     spider = await session.get(Spider, task.spider_id)
     if spider:
-        from app.common.dependencies import verify_resource_owner
         verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
 
     if task.status not in ("running", "pending"):
@@ -195,7 +198,6 @@ async def stop_task(
 
     # ── 2. 直接更新数据库状态为 cancelled ──
     try:
-        from app.common.timezone import now
         await session.execute(
             sa_update(SpiderTask)
             .where(SpiderTask.task_id == task_id)
@@ -227,44 +229,25 @@ async def stop_task(
         logger.warning(f"Redis error when sending kill signal for task {task_id}: {e}")
 
     # ── 4. 记录审计日志：停止任务 ──
-    try:
-        await record_audit_log(
-            session=session,
-            operator=operator,
-            action="STOP",
-            resource_type="task",
-            resource_id=task_id,
-            original_value=json.dumps({
-                "spider_id": task.spider_id,
-                "spider_name": task.spider_name,
-                "previous_status": task.status,
-            }, default=str, ensure_ascii=False),
-            new_value=json.dumps({"status": "cancelled"}, ensure_ascii=False),
-            status_code=200,
-            request=request,
-        )
-        await session.commit()
-    except Exception as e:
-        logger.warning(f"Failed to record audit log for stopping task {task_id}: {e}")
+    # 使用 @audit_log 装饰器自动捕获
 
     return ApiResponse.success(data={"task_id": task_id}, message="Task cancelled")
 
 
 @router.post("/{task_id}/delete", response_model=ApiResponse, summary="删除任务记录")
+@audit_log(action="DELETE", resource_type="task")
 async def delete_task(
     task_id: str,
-    request: Request,
+    background_tasks: BackgroundTasks,
     redis: Redis = Depends(get_redis),
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
 ):
     """
-    删除指定任务的数据库记录，同时级联删除关联的日志。
+    软删除指定任务记录（标记 is_deleted = True）。
     仅允许删除非 running 状态的任务。
     同时清理该任务在 Redis 中可能残留的未处理数据缓存。
     """
-    from sqlalchemy import delete as sa_delete
-    from app.api.tasks.task_log_models import TaskLog
 
     # 校验任务存在性和状态
     result = await session.execute(
@@ -275,10 +258,15 @@ async def delete_task(
     if task:
         spider = await session.get(Spider, task.spider_id)
         if spider:
-            from app.common.dependencies import verify_resource_owner
             verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
 
     if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task {task_id} not found",
+        )
+
+    if task.is_deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Task {task_id} not found",
@@ -291,29 +279,14 @@ async def delete_task(
         )
 
     try:
-        # 先删关联日志，再删任务本身
+        # 软删除：标记 is_deleted = True，不再删除关联日志
         await session.execute(
-            sa_delete(TaskLog).where(TaskLog.task_id == task_id)
-        )
-        await session.execute(
-            sa_delete(SpiderTask).where(SpiderTask.task_id == task_id)
-        )
-        await record_audit_log(
-            session=session,
-            operator=operator,
-            action="DELETE",
-            resource_type="task",
-            resource_id=task_id,
-            original_value=json.dumps({
-                "spider_id": task.spider_id,
-                "spider_name": task.spider_name,
-                "status": task.status,
-            }, default=str, ensure_ascii=False),
-            status_code=200,
-            request=request,
+            sa_update(SpiderTask)
+            .where(SpiderTask.task_id == task_id)
+            .values(is_deleted=True)
         )
         await session.commit()
-        logger.info(f"Task {task_id} and its logs deleted successfully")
+        logger.info(f"Task {task_id} soft-deleted successfully")
     except Exception as e:
         logger.error(f"Failed to delete task {task_id}: {e}")
         raise HTTPException(
@@ -349,7 +322,6 @@ async def get_task_logs(
     从数据库中查询指定任务的历史日志记录（按时间升序）。
     用于非 running 状态的任务日志回放。
     """
-    from app.api.tasks.task_log_models import TaskLog
 
     try:
         result = await session.execute(
@@ -365,6 +337,20 @@ async def get_task_logs(
             {"id": log.id, "content": log.content, "created_at": str(log.created_at)}
             for log in logs
         ]
+
+        # 如果没有日志记录，但任务有 error_detail，则补充一条系统日志
+        if not log_items and skip == 0:
+            task_result = await session.execute(
+                select(SpiderTask).where(SpiderTask.task_id == task_id)
+            )
+            task_obj = task_result.scalars().first()
+            if task_obj and task_obj.error_detail:
+                log_items.append({
+                    "id": 0,
+                    "content": f"[SYSTEM ERROR]: {task_obj.error_detail}",
+                    "created_at": str(task_obj.finished_at or task_obj.updated_at or now())
+                })
+
         return ApiResponse.success(data=log_items)
     except Exception as e:
         logger.error(f"Failed to fetch logs for task {task_id}: {e}")
@@ -396,8 +382,6 @@ async def ingest_data(
     - 接口内部严禁任何 Postgres 同步操作
     - 响应时间需维持在毫秒级，以支撑百级别爬虫并发
     """
-    from app.common.timezone import now
-
     timestamp = now().isoformat()
 
     try:
@@ -438,11 +422,11 @@ async def run_task(request: TaskRequest, redis: Redis = Depends(get_redis)):
     """
     async with async_session_maker() as session:
         result = await session.execute(
-            select(Spider).where(Spider.id == request.spider_id)
+            select(Spider).where(Spider.id == request.spider_id, Spider.is_deleted == False)
         )
         spider = result.scalars().first()
 
-    if not spider:
+    if not spider or spider.is_deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Spider {request.spider_id} not found."
@@ -452,13 +436,26 @@ async def run_task(request: TaskRequest, redis: Redis = Depends(get_redis)):
         task_payload = {
             "task_id": request.task_id,
             "spider_id": request.spider_id,
-            "language": spider.language,
+            "project_id": spider.project_id,
+            "language": spider.language or "default",
             "source_type": spider.source_type,
             "source_url": spider.source_url,
             "script_path": request.script_path,
             "timeout_seconds": request.timeout_seconds,
         }
         task_data = json.dumps(task_payload)
+
+        # ── 创建持久化任务记录 ──
+        async with async_session_maker() as session:
+            db_task = SpiderTask(
+                task_id=request.task_id,
+                spider_id=request.spider_id,
+                spider_name=spider.name,
+                status="pending",
+                command=spider.command,
+            )
+            session.add(db_task)
+            await session.commit()
 
         target_queues: list[str] = []
         if request.target_node_ids:
@@ -533,17 +530,24 @@ def _build_cron_response(job: "Job") -> CronTaskResponse:
         enabled=job.next_run_time is not None,
         target_node_ids=kwargs.get("target_node_ids"),
         next_run_time=str(job.next_run_time) if job.next_run_time else None,
+        owner_id=kwargs.get("owner_id"),
     )
 
 
 @router.post("/cron", response_model=CronTaskResponse, summary="添加定时爬虫任务")
-async def add_cron_task(request: CronTaskCreate):
+@audit_log(action="CREATE", resource_type="cron_task")
+async def add_cron_task(
+    body: CronTaskCreate,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_developer),
+):
     """
     向 APScheduler 添加一个基于 Cron 表达式的定时任务。
     当达到触发时间时，调度器会自动把任务发布到 Redis 队列。
     """
     try:
-        trigger = CronTrigger.from_crontab(request.cron_expr)
+        trigger = CronTrigger.from_crontab(body.cron_expr)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -558,29 +562,29 @@ async def add_cron_task(request: CronTaskCreate):
             trigger=trigger,
             id=job_id,
             kwargs={
-                "spider_id": request.spider_id,
-                "target_node_ids": request.target_node_ids,
-                "timeout_seconds": request.timeout_seconds,
+                "spider_id": body.spider_id,
+                "target_node_ids": body.target_node_ids,
+                "timeout_seconds": body.timeout_seconds,
                 # 额外元数据存入 kwargs 以便后续读取
-                "cron_expr": request.cron_expr,
-                "description": request.description,
+                "cron_expr": body.cron_expr,
+                "description": body.description,
+                "owner_id": operator.id,
             },
             replace_existing=True,
-            misfire_grace_time=60,
         )
 
         # 如果创建时 enabled=False，立即暂停
-        if not request.enabled:
+        if not body.enabled:
             job.pause()
 
-        spider_name = await _get_spider_name(request.spider_id)
+        spider_name = await _get_spider_name(body.spider_id)
 
-        logger.info(f"Cron task {job_id} added for spider {request.spider_id} with expr {request.cron_expr}")
+        logger.info(f"Cron task {job_id} added for spider {body.spider_id} with expr {body.cron_expr}")
 
         resp = _build_cron_response(job)
         resp.spider_name = spider_name
         # enabled 需要根据请求手动设置，因为 pause 后 next_run_time 为 None
-        resp.enabled = request.enabled
+        resp.enabled = body.enabled
         return resp
 
     except HTTPException:
@@ -623,6 +627,11 @@ async def get_cron_tasks():
                 logger.warning(f"Failed to fetch spider names: {e}")
 
         for job in jobs:
+            kwargs = job.kwargs or {}
+            # 只返回有关联 spider_id 的任务，过滤掉系统内置任务（如 daily_image_prune）
+            if "spider_id" not in kwargs:
+                continue
+                
             resp = _build_cron_response(job)
             resp.spider_name = spider_name_map.get(resp.spider_id, "")
             response_list.append(resp)
@@ -637,14 +646,30 @@ async def get_cron_tasks():
 
 
 @router.post("/cron/{job_id}/delete", summary="删除指定的定时任务")
-async def delete_cron_task(job_id: str):
+@audit_log(action="DELETE", resource_type="cron_task")
+async def delete_cron_task(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_developer),
+):
     """
     根据 Job ID 删除 APScheduler 中的任务。
     """
     try:
+        job = scheduler.get_job(job_id)
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"定时任务未找到或删除失败"
+            )
+        
         scheduler.remove_job(job_id)
+
         logger.info(f"Cron task {job_id} removed successfully")
         return {"message": "定时任务已删除", "job_id": job_id}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to remove cron task {job_id}: {e}")
         raise HTTPException(
@@ -654,7 +679,14 @@ async def delete_cron_task(job_id: str):
 
 
 @router.post("/cron/{job_id}/toggle", response_model=CronTaskResponse, summary="切换定时任务开关")
-async def toggle_cron_task(job_id: str, request: CronTaskToggle):
+@audit_log(action="TOGGLE", resource_type="cron_task")
+async def toggle_cron_task(
+    job_id: str,
+    body: CronTaskToggle,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_developer),
+):
     """
     暂停或恢复指定的定时任务。
     """
@@ -666,17 +698,17 @@ async def toggle_cron_task(job_id: str, request: CronTaskToggle):
                 detail=f"定时任务 {job_id} 不存在"
             )
 
-        if request.enabled:
+        if body.enabled:
             job.resume()
         else:
             job.pause()
 
-        logger.info(f"Cron task {job_id} {'enabled' if request.enabled else 'disabled'}")
+        logger.info(f"Cron task {job_id} {'enabled' if body.enabled else 'disabled'}")
 
         spider_name = await _get_spider_name((job.kwargs or {}).get("spider_id", 0))
         resp = _build_cron_response(job)
         resp.spider_name = spider_name
-        resp.enabled = request.enabled
+        resp.enabled = body.enabled
         return resp
 
     except HTTPException:
@@ -690,7 +722,14 @@ async def toggle_cron_task(job_id: str, request: CronTaskToggle):
 
 
 @router.post("/cron/{job_id}/update", response_model=CronTaskResponse, summary="修改指定的定时任务")
-async def update_cron_task(job_id: str, request: CronTaskUpdate):
+@audit_log(action="UPDATE", resource_type="cron_task")
+async def update_cron_task(
+    job_id: str,
+    body: CronTaskUpdate,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_async_session),
+    operator: User = Depends(require_developer),
+):
     """
     修改已有定时任务的属性（爬虫关联、cron 表达式、描述、节点等）。
     """
@@ -704,34 +743,36 @@ async def update_cron_task(job_id: str, request: CronTaskUpdate):
 
         current_kwargs = dict(job.kwargs or {})
 
+        original_kwargs = dict(current_kwargs)
+
         # 部分覆盖 kwargs
-        if request.spider_id is not None:
-            current_kwargs["spider_id"] = request.spider_id
-        if request.description is not None:
-            current_kwargs["description"] = request.description
-        if request.target_node_ids is not None:
-            current_kwargs["target_node_ids"] = request.target_node_ids if request.target_node_ids else None
-        if request.timeout_seconds is not None:
-            current_kwargs["timeout_seconds"] = request.timeout_seconds
+        if body.spider_id is not None:
+            current_kwargs["spider_id"] = body.spider_id
+        if body.description is not None:
+            current_kwargs["description"] = body.description
+        if body.target_node_ids is not None:
+            current_kwargs["target_node_ids"] = body.target_node_ids if body.target_node_ids else None
+        if body.timeout_seconds is not None:
+            current_kwargs["timeout_seconds"] = body.timeout_seconds
 
         # 如果修改了 cron 表达式
-        if request.cron_expr is not None:
+        if body.cron_expr is not None:
             try:
-                trigger = CronTrigger.from_crontab(request.cron_expr)
+                trigger = CronTrigger.from_crontab(body.cron_expr)
             except ValueError as e:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"无效的 Cron 表达式: {str(e)}"
                 )
-            current_kwargs["cron_expr"] = request.cron_expr
+            current_kwargs["cron_expr"] = body.cron_expr
             job.modify(kwargs=current_kwargs)
             job.reschedule(trigger=trigger)
         else:
             job.modify(kwargs=current_kwargs)
 
         # 处理 enabled 切换
-        if request.enabled is not None:
-            if request.enabled:
+        if body.enabled is not None:
+            if body.enabled:
                 job.resume()
             else:
                 job.pause()
@@ -741,8 +782,8 @@ async def update_cron_task(job_id: str, request: CronTaskUpdate):
         spider_name = await _get_spider_name(current_kwargs.get("spider_id", 0))
         resp = _build_cron_response(job)
         resp.spider_name = spider_name
-        if request.enabled is not None:
-            resp.enabled = request.enabled
+        if body.enabled is not None:
+            resp.enabled = body.enabled
         return resp
 
     except HTTPException:

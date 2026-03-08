@@ -1,0 +1,24 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends tzdata && \
+    ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone && \
+    groupadd -r spider && useradd -r -g spider -d /app -s /sbin/nologin spider && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY . /app/
+RUN find . -maxdepth 2 -name "*.py"
+RUN if [ -f "requirements.txt" ]; then pip install --no-cache-dir -r requirements.txt; fi && \
+    chown -R spider:spider /app
+
+# Switch to non-root user
+USER spider
+
+# NOTE: spidermanager_sdk 等会在 worker 启动容器时挂载或由代码自带，这里仅保证基础依赖。
+CMD ["python", "{{ entrypoint }}"]

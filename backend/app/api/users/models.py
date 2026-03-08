@@ -12,7 +12,7 @@ from typing import Optional
 from sqlmodel import SQLModel, Field, Column
 from sqlalchemy import Enum as SAEnum
 
-from app.common.enums import UserRole
+from app.core.enums import UserRole
 
 
 class User(SQLModel, table=True):

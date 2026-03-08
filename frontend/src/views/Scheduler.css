@@ -11,6 +11,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px 24px;
+    flex-wrap: wrap;
+    gap: 16px;
 }
 
 .sch-header-left {
@@ -35,6 +37,110 @@
     padding: 3px 10px;
     border-radius: 20px;
     border: 1px solid var(--border-color);
+}
+
+.sch-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+/* ─────────────────────────────── 筛选栏 ─────────────────────────────── */
+.sch-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.sch-filter-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0 12px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.sch-filter-item:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.sch-filter-item svg {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.sch-filter-input {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 0.875rem;
+    padding: 9px 0;
+    width: 160px;
+    outline: none;
+}
+
+.sch-filter-input::placeholder {
+    color: var(--text-muted);
+}
+
+.sch-filter-clear {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    border-radius: 4px;
+    transition: color 0.2s, background 0.2s;
+}
+
+.sch-filter-clear:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.sch-filter-select {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 0.875rem;
+    padding: 9px 0;
+    padding-right: 20px;
+    outline: none;
+    cursor: pointer;
+    min-width: 140px;
+}
+
+.sch-filter-select option {
+    background: var(--bg-primary);
+    color: #fff;
+}
+
+.sch-filter-reset {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sch-filter-reset:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 /* ─────────────────────────────── 按钮 ─────────────────────────────── */

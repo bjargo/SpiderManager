@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     # Docker Compose 生产模式：通过环境变量覆盖为 minio:9000（Docker 服务名）
     MINIO_CONTAINER_ENDPOINT: str = "host.docker.internal:9000"
 
+    # ── Git 全局私有仓库鉴权配置 ──
+    GIT_GLOBAL_USERNAME: str | None = None
+    GIT_GLOBAL_PASSWORD: str | None = None  # 支持 Personal Access Token
+    GIT_SSH_KEY_PATH: str | None = None     # 例如 /root/.ssh/id_rsa
+
     # ── 安全配置 ──
     SECRET_KEY: str = "YOUR_SUPER_SECRET_KEY_HERE"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
@@ -108,8 +113,9 @@ class Settings(BaseSettings):
     HEARTBEAT_TTL: int = 15           # 心跳 Redis 键过期时间（秒）
 
     # ── 调度器配置 ──
-    SCHEDULER_THREAD_POOL_SIZE: int = 20
-    SCHEDULER_MAX_INSTANCES: int = 3
+    SCHEDULER_THREAD_POOL_SIZE: int = 50
+    SCHEDULER_MAX_INSTANCES: int = 100
+    SCHEDULER_MISFIRE_GRACE_TIME: int = 60
 
     # ── 任务配置 ──
     TASK_STATUS_EXPIRE_SECONDS: int = 7 * 24 * 3600  # 任务状态在 Redis 中的过期时间
@@ -133,11 +139,11 @@ class Settings(BaseSettings):
     DOCKER_CPU_QUOTA: int = 100_000    # 等效 1 核 CPU
     DOCKER_NETWORK: str = "spidermanage_net"
 
-    # ── 爬虫容器内回连后端的地址 ──
+    # 爬虫容器内回连后端的地址
     # 容器(爬虫)通过 Docker 内部网络访问 Master API 的地址
-    # Docker Compose 模式：走服务名 http://master:8000（同网络自动解析）
-    # 本地开发模式：设为 http://host.docker.internal:8000 或 http://localhost:8000
-    SPIDER_API_URL: str = "http://master:8000"
+    # Docker Compose 模式：通过环境变量覆盖为 http://master:8000（服务名解析）
+    # 本地开发模式(宿主机运行后端): 设为 http://host.docker.internal:8000
+    SPIDER_API_URL: str = "http://host.docker.internal:8000"
 
     model_config = SettingsConfigDict(
         env_file=".env",

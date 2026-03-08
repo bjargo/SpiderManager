@@ -1,7 +1,7 @@
 import logging
 from sqlmodel import select
 from app.api.users.models import User
-from app.common.enums import UserRole
+from app.core.enums import UserRole
 from app.db.database import async_session_maker
 from fastapi_users.password import PasswordHelper
 

@@ -6,7 +6,7 @@ from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field
 
-from app.common.enums import UserRole
+from app.core.enums import UserRole
 
 
 # ── 请求体 ──────────────────────────────────────────────────────────────────

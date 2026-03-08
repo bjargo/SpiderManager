@@ -8,6 +8,7 @@ export interface ProjectItem {
     created_at: string;
     updated_at: string;
     spider_count: number;
+    is_deleted?: boolean;
 }
 
 export const fetchProjectList = (): Promise<ApiResponse<ProjectItem[]>> => {

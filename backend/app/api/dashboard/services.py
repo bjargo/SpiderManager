@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timedelta
-from app.common.timezone import now as now_tz
+from app.core.timezone import now as now_tz
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_

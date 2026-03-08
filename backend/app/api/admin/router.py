@@ -30,12 +30,12 @@ from app.api.admin.schemas import (
     AdminLogQueryRequest,
     AuditLogOut,
 )
-from app.api.audit.models import AuditLog
+from app.core.audit.models import AuditLog
 from app.api.users.models import User
 from app.api.users.schemas import UserCreate
 from app.api.users.manager import get_user_manager, UserManager
-from app.common.dependencies import require_admin, get_current_verified_user
-from app.common.schemas.api_response import ApiResponse
+from app.core.dependencies import require_admin, get_current_verified_user
+from app.core.schemas.api_response import ApiResponse
 from app.db.database import get_async_session
 
 router = APIRouter()

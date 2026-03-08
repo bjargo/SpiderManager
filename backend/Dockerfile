@@ -10,7 +10,7 @@ ENV TZ=Asia/Shanghai
 
 # 核心修改：安装 tzdata 时区包并清理缓存，然后再配置时区链接
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends tzdata && \
+    apt-get install -y --no-install-recommends tzdata git && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
     echo $TZ > /etc/timezone && \
     apt-get clean && \

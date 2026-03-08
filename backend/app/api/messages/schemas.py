@@ -32,6 +32,7 @@ class SystemMessageOut(SystemMessageBase):
 
     created_at: datetime
     read_at: Optional[datetime] = None
+    is_deleted: bool = False
 
     class Config:
         orm_mode = True

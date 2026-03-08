@@ -5,8 +5,10 @@ DockerManager — DooD (Docker-outside-of-Docker) 爬虫容器管理模块
 动态创建、运行并监控爬虫容器，实现多语言爬虫的隔离执行。
 """
 import logging
+import socket
+from urllib.parse import urlparse
 from typing import Any, Dict, Optional
-from app.common.storage.minio_client import minio_manager
+from app.core.storage.minio_client import minio_manager
 
 import docker
 from docker.errors import (
@@ -48,6 +50,26 @@ class DockerManager:
                 logger.error("Failed to connect to Docker daemon: %s", exc)
                 raise
         return self._client
+
+    def _resolve_master_host_mapping(self) -> Dict[str, str]:
+        """
+        解析 settings.SPIDER_API_URL 中的主机名并获取其公网 IP。
+        返回用于 Docker extra_hosts 的字典映射。
+        """
+        try:
+            parsed_url = urlparse(settings.SPIDER_API_URL)
+            hostname = parsed_url.hostname
+            
+            if not hostname or hostname == "host.docker.internal":
+                return {}
+
+            # 尝试解析 IP
+            master_ip = socket.gethostbyname(hostname)
+            logger.info("Resolved Master hostname '%s' to IP: %s", hostname, master_ip)
+            return {hostname: master_ip}
+        except (socket.gaierror, Exception) as exc:
+            logger.warning("Failed to resolve Master hostname IP: %s", exc)
+            return {}
 
     # ─────────────────────────────────────────────
     # 核心方法：启动爬虫容器
@@ -100,39 +122,9 @@ class DockerManager:
         network = network or settings.DOCKER_NETWORK
 
         task_id: str = task_payload["task_id"]
-        image: str = task_payload.get("language", "python:3.11-slim")
-        source_url: str = task_payload["source_url"]
-        script_path: str = task_payload["script_path"]
-        timeout_seconds: int = task_payload.get("timeout_seconds", 3600)
-
-        # ── 构造容器内签发的 MinIO 预签名下载地址 ──
-        try:
-            download_url = minio_manager.generate_presigned_url_for_container(
-                object_name=source_url,
-                expires_in_minutes=15
-            )
-        except Exception as e:
-            logger.error(f"Failed to generate container download URL for {source_url}: {e}")
-            raise RuntimeError(f"Cannot generate presigned URL for container: {e}")
-
-        # ── 拼装自包含的 Shell 命令 ──
-        # 工作流: 用 Python 内置库下载并解压 ZIP → 进入目录 → 执行脚本
-        # 使用 Python 而非 wget/unzip，避免精简镜像（python:3.x-slim 等）缺少这些工具的问题。
-        py_download = (
-            "import urllib.request, zipfile, io, sys; "
-            f"data = urllib.request.urlopen('{download_url}').read(); "
-            "zipfile.ZipFile(io.BytesIO(data)).extractall('.')"
-        )
-        shell_command = (
-            "set -e && "
-            "mkdir -p /work && cd /work && "
-            f"python3 -c \"{py_download}\" && "
-            # 若 ZIP 内有一个顶级目录则进入，否则留在当前目录
-            "dir=$(ls -d */ 2>/dev/null | head -1 || true) && "
-            "[ -n \"$dir\" ] && cd \"$dir\" || true && "
-            f"timeout {timeout_seconds} {script_path}"
-        )
-
+        # 获取由 executor 传入的已经构建好的专有镜像 Tag
+        image: str = task_payload.get("image_tag", task_payload.get("language", "python:3.11-slim"))
+        
         container_name = f"spider-task-{task_id[:16]}"
 
         environment = {
@@ -146,13 +138,17 @@ class DockerManager:
             task_id, image, network, mem_limit,
         )
 
+        # 动态解析 Master 宿主 IP 并注入
+        extra_hosts = {"host.docker.internal": "host-gateway"}
+        extra_hosts.update(self._resolve_master_host_mapping())
+
         try:
             container = self.client.containers.run(
                 image=image,
-                command=["sh", "-c", shell_command],
                 name=container_name,
                 environment=environment,
                 network=network,
+                extra_hosts=extra_hosts,
                 mem_limit=mem_limit,
                 cpu_period=cpu_period,
                 cpu_quota=cpu_quota,
@@ -172,10 +168,10 @@ class DockerManager:
                 logger.info("Image '%s' pulled successfully. Retrying container run...", image)
                 container = self.client.containers.run(
                     image=image,
-                    command=["sh", "-c", shell_command],
                     name=container_name,
                     environment=environment,
                     network=network,
+                    extra_hosts=extra_hosts,
                     mem_limit=mem_limit,
                     cpu_period=cpu_period,
                     cpu_quota=cpu_quota,
