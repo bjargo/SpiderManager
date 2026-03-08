@@ -38,7 +38,7 @@ async def get_system_stats() -> Dict[str, Any]:
     cpu_percent = psutil.cpu_percent(interval=None)
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
-    
+
     return {
         "node_id": NODE_ID,
         "role": settings.NODE_ROLE,
@@ -66,7 +66,7 @@ async def send_heartbeat() -> None:
 
             stats = await get_system_stats()
             value = json.dumps(stats)
-            
+
             # 写入 Redis 并带有 TTL，使用防御性编程处理可能的异常
             await redis_manager.client.set(HEARTBEAT_KEY, value, ex=HEARTBEAT_TTL)
             logger.debug(f"Heartbeat sent for node {NODE_ID}: {stats}")

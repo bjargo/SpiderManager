@@ -22,18 +22,18 @@ async def test_run_spider_container(mock_load_project, mock_get_handler, mock_im
     test_dir = "./temp_runner_test"
     os.makedirs(test_dir, exist_ok=True)
     mock_load_project.return_value = test_dir
-    
+
     # Mock source handler hash
     mock_handler = MagicMock()
     mock_handler.get_version_hash.return_value = "fake123hash"
     mock_get_handler.return_value = mock_handler
-    
+
     # Mock ImageManager Docker client
     mock_im_client = MagicMock()
     mock_im_docker.return_value = mock_im_client
     mock_im_client.images.get.side_effect = Exception("Not found") # Force build
     mock_im_client.images.build.return_value = (MagicMock(), [{"stream": "building fake image...\n"}])
-    
+
     # Mock DockerManager Docker client
     mock_dm_client = MagicMock()
     mock_dm_docker.return_value = mock_dm_client
@@ -41,7 +41,7 @@ async def test_run_spider_container(mock_load_project, mock_get_handler, mock_im
     mock_container.wait.return_value = {"StatusCode": 0}
     mock_container.short_id = "fake_short_id_xyz"
     mock_dm_client.containers.run.return_value = mock_container
-    
+
     # Provide fake task data typical for this setup
     task_data = {
         "task_id": "test_runner_task_123",
@@ -56,9 +56,9 @@ async def test_run_spider_container(mock_load_project, mock_get_handler, mock_im
     # Without real Redis, executor's _execute_task_in_container will crash trying to publish things.
     # We will just test the DockerManager part independently of Executor to verify the parameter changes.
     dm = DockerManager()
-    
+
     task_data["image_tag"] = "spider-test-proj-456:fake123"
-    
+
     print("Testing DockerManager.run_spider_container...")
     try:
         container = dm.run_spider_container(task_data)

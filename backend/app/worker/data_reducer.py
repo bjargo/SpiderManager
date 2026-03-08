@@ -136,7 +136,7 @@ async def _batch_insert(
     if not rows:
         return
 
-    
+
 
     # 构建参数化占位符:
     # INSERT INTO "table" ("_task_id", "_data")

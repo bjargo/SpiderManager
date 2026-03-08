@@ -33,7 +33,7 @@ class RedisManager:
                 retry_on_timeout=True,          # 提高可用性
             )
             self.client = Redis(connection_pool=self.pool)
-            
+
             # 使用 ping 探测连通性，提前发现异常
             await self.client.ping()
             logger.info("Redis connection pool initialized successfully.")
@@ -69,7 +69,7 @@ async def get_redis() -> AsyncGenerator[Redis, None]:
     if redis_manager.client is None:
         logger.error("Redis client is requested but not initialized.")
         raise ConnectionError("Redis client is not initialized. Make sure init_pool is called at startup.")
-    
+
     try:
         # yield 将连接状态暴露给 caller
         yield redis_manager.client

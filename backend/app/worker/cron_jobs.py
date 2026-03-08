@@ -58,7 +58,7 @@ async def dispatch_scheduled_task(
                 queues.append(f"{settings.NODE_QUEUE_PREFIX}{node_id}")
         else:
             queues.append(settings.PUBLIC_QUEUE_KEY)
-            
+
         async with async_session_maker() as session:
             for target_queue in queues:
                 node_identifier = target_queue.split(":")[-1] if target_queue != settings.PUBLIC_QUEUE_KEY else "public"

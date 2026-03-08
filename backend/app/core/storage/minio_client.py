@@ -41,7 +41,7 @@ class MinioClientManager:
                 logger.info(f"Created MinIO bucket: {self.bucket_name}")
             else:
                 logger.debug(f"MinIO bucket '{self.bucket_name}' already exists.")
-                
+
             logger.info("MinIO client initialized successfully.")
         except (S3Error, MaxRetryError, Exception) as e:
             logger.error(f"Failed to initialize MinIO client: {e}")
@@ -54,7 +54,7 @@ class MinioClientManager:
         """
         if not self.client:
             raise RuntimeError("MinIO client not initialized")
-            
+
         try:
             # 当文件大小未知时，MinIO 要求指定 part_size (最小 5MB)
             kwargs: dict = {
@@ -133,7 +133,7 @@ class MinioClientManager:
         """
         if not self.client:
             raise RuntimeError("MinIO client not initialized")
-            
+
         try:
             url = self.client.presigned_get_object(
                 bucket_name=self.bucket_name,

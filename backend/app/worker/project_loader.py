@@ -64,23 +64,23 @@ async def _clone_or_pull_git(source_url: str, dest_dir: str) -> None:
             if os.path.exists(dest_dir):
                 shutil.rmtree(dest_dir)
             os.makedirs(dest_dir, exist_ok=True)
-            
+
             process = await asyncio.create_subprocess_exec(
                 "git", "clone", source_url, ".",
                 cwd=dest_dir,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            
+
         stdout, stderr = await process.communicate()
-        
+
         if process.returncode != 0:
             error_msg = stderr.decode('utf-8', errors='ignore')
             logger.error(f"Git operation failed: {error_msg}")
             raise RuntimeError(f"Git Error: {error_msg}")
-            
+
         logger.info(f"Successfully loaded GIT project to {dest_dir}")
-        
+
     except Exception as e:
         logger.error(f"Failed to load GIT project: {e}")
         raise RuntimeError(f"Git Loading Error: {str(e)}") from e
@@ -92,7 +92,7 @@ async def load_project(task_id: str, source_type: str, source_url: str, base_dir
     """
     project_dir = os.path.join(base_dir, task_id)
     os.makedirs(project_dir, exist_ok=True)
-    
+
     try:
         if source_type == SourceType.MINIO.value or source_type == SourceType.MINIO:
             await _download_and_extract_zip(source_url, project_dir)
@@ -100,9 +100,9 @@ async def load_project(task_id: str, source_type: str, source_url: str, base_dir
             await _clone_or_pull_git(source_url, project_dir)
         else:
             raise ValueError(f"Unsupported source type: {source_type}")
-            
+
         return project_dir
-        
+
     except Exception as e:
         # 如果加载过程出错，尽早清理产生的残余（如果有防爆满需求）
         # 这里可以选择不清理，交由外部 finally 统一处理

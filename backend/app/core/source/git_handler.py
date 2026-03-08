@@ -13,7 +13,7 @@ class GitSourceHandler(SourceHandler):
         """
         branch = kwargs.get("branch")
         logger.info(f"Cloning git repository {url} (branch: {branch or 'default'}) to {dest_dir}...")
-        
+
         # ── 1. 处理 HTTP/HTTPS 协议密码注入 ──
         auth_url = url
         if url.startswith("http://") or url.startswith("https://"):
@@ -33,7 +33,7 @@ class GitSourceHandler(SourceHandler):
         if settings.GIT_SSH_KEY_PATH and os.path.exists(settings.GIT_SSH_KEY_PATH):
             # 禁用 StrictHostKeyChecking 以防止未知主机卡死进城
             env_vars["GIT_SSH_COMMAND"] = f"ssh -i {settings.GIT_SSH_KEY_PATH} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        
+
         try:
             if branch:
                 repo = git.Repo.clone_from(auth_url, dest_dir, branch=branch, env=env_vars)
@@ -64,7 +64,7 @@ class GitSourceHandler(SourceHandler):
         """
         branch = kwargs.get("branch") or "HEAD"
         logger.info(f"Getting remote fingerprint for Git {url} (branch: {branch})...")
-        
+
         # ── 1. 处理 HTTP/HTTPS 协议认证 ──
         auth_url = url
         if url.startswith("http://") or url.startswith("https://"):
@@ -82,7 +82,7 @@ class GitSourceHandler(SourceHandler):
         env_vars = {}
         if settings.GIT_SSH_KEY_PATH and os.path.exists(settings.GIT_SSH_KEY_PATH):
             env_vars["GIT_SSH_COMMAND"] = f"ssh -i {settings.GIT_SSH_KEY_PATH} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        
+
         try:
             # 使用 git.cmd.Git().ls_remote 而非 Repo().ls_remote，因为不需要初始化本地仓库
             g = git.cmd.Git()
@@ -95,7 +95,7 @@ class GitSourceHandler(SourceHandler):
                     raise RuntimeError(f"Connection failed or no refs found at {url}")
                 # 如果没找到特定的 HEAD/branch，抛出异常以回退模式
                 raise RuntimeError(f"Branch {branch} not found at {url}")
-            
+
             # 提取第一行的第一个字段
             remote_hash = output.split()[0]
             logger.info(f"Remote fingerprint for Git {url}: {remote_hash}")

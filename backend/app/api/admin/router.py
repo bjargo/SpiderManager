@@ -289,7 +289,7 @@ async def admin_export_logs(
         output.write('\ufeff')
         writer = csv.writer(output)
         writer.writerow([
-            "ID", "操作者 ID", "角色", "动作", "资源类型", 
+            "ID", "操作者 ID", "角色", "动作", "资源类型",
             "资源 ID", "旧值", "新值", "IP 地址", "状态码", "时间"
         ])
         yield output.getvalue()

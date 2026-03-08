@@ -59,7 +59,7 @@ class DockerManager:
         try:
             parsed_url = urlparse(settings.SPIDER_API_URL)
             hostname = parsed_url.hostname
-            
+
             if not hostname or hostname == "host.docker.internal":
                 return {}
 
@@ -124,7 +124,7 @@ class DockerManager:
         task_id: str = task_payload["task_id"]
         # 获取由 executor 传入的已经构建好的专有镜像 Tag
         image: str = task_payload.get("image_tag", task_payload.get("language", "python:3.11-slim"))
-        
+
         container_name = f"spider-task-{task_id[:16]}"
 
         environment = {

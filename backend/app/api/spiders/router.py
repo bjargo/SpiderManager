@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 async def upload_spider_zip(file: UploadFile = File(...)):
     if not file.filename.endswith('.zip'):
         raise HTTPException(status_code=400, detail="Only .zip files are allowed")
-    
+
     object_name = f"spiders/{uuid.uuid4().hex[:8]}/{file.filename}"
     try:
         # Uploading using MinIO client
@@ -94,7 +94,7 @@ async def read_spiders(
     operator: User = Depends(require_viewer),
 ):
     stmt = select(Spider).where(Spider.is_deleted == False).order_by(Spider.created_at.desc()).offset(skip).limit(limit)
-        
+
     result = await session.execute(stmt)
     spiders = result.scalars().all()
     return ApiResponse.success(data=list(spiders))
@@ -162,13 +162,13 @@ async def delete_spider(
     spider = await session.get(Spider, spider_id)
     if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
-        
+
     # 校验所有权
     verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
-    
+
     spider.is_deleted = True
     session.add(spider)
-    
+
     await session.commit()
     return ApiResponse.success(message="Spider deleted successfully")
 
@@ -476,7 +476,7 @@ async def run_spider(
     spider = await session.get(Spider, spider_id)
     if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
-        
+
     verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
 
     task_id = str(uuid.uuid4())
@@ -537,7 +537,7 @@ async def list_spider_tasks(
     spider = await session.get(Spider, spider_id)
     if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
-        
+
     # 对于 admin 则不进行权限过滤，其他人需要 own
     if operator.role != UserRole.admin:
         verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
@@ -565,7 +565,7 @@ async def get_task_logs(
     spider = await session.get(Spider, spider_id)
     if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
-        
+
     verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
 
     result = await session.execute(
@@ -589,9 +589,9 @@ async def get_spider_status(
     spider = await session.get(Spider, spider_id)
     if not spider or spider.is_deleted:
         raise HTTPException(status_code=404, detail="Spider not found")
-        
+
     verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
-    
+
     result = await session.execute(
         select(SpiderTask)
         .where(SpiderTask.spider_id == spider_id)

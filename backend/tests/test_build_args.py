@@ -15,12 +15,12 @@ def test_build_args_passed_to_docker(mock_get_runner, mock_docker_env):
     # Mock images.build 返回 2 个值：(image_obj, build_logs_generator)
     mock_client.images.build.return_value = (MagicMock(), [])
     mock_docker_env.return_value = mock_client
-    
+
     manager = ImageManager()
-    
+
     # 模拟 check_image_exists 返回 False, 这样才会走下面的构建逻辑
     with patch.object(manager, 'check_image_exists', return_value=False):
-        
+
         # 准备一个包含 private_token 的构建参数
         manager.build_image(
             local_path="/tmp/fake_build",

@@ -6,12 +6,12 @@ import uuid
 class SpiderBase(BaseModel):
     name: str = Field(..., description="爬虫名称")
     description: Optional[str] = Field(None, description="爬虫描述")
-    
+
     # 关联项目的配置 (使用刚才建立的 Project 元数据中的信息)
     project_id: str = Field(..., description="关联的项目ID")
     source_type: str = Field(..., description="代码源类型: MINIO 或 GIT")
     source_url: str = Field(..., description="MinIO Key 或 Git URL")
-    
+
     language: Optional[str] = Field("python:3.11-slim", description="Docker 基础镜像名称")
     command: Optional[str] = Field(None, description="执行命令，如 'python run.py'")
     # 在前端/请求中，我们用 List[str] 接收 target_nodes

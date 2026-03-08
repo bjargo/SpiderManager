@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
                 )
     except Exception as e:
         logger.error(f"Failed to clean orphaned tasks: {e}")
-    
+
     node_role = getattr(settings, "NODE_ROLE", "master")
     heartbeat_task = None
     task_listener_task = None
@@ -82,9 +82,9 @@ async def lifespan(app: FastAPI):
     # Data Reducer：消费爬虫采集数据队列，批量入库 + 实时分发
     from app.worker.data_reducer import start_data_reducer
     data_reducer_task = await start_data_reducer()
-        
+
     yield
-    
+
     if data_reducer_task:
         data_reducer_task.cancel()
     if task_listener_task:

@@ -35,29 +35,29 @@ async def get_nodes(
         # 使用 SCAN 命令而不是 KEYS 以防阻塞 Redis
         cursor = 0  # int 0 for aioredis / redis-py 4+
         match_pattern = "node:status:*"
-        
+
         while True:
             cursor, keys = await redis.scan(cursor=cursor, match=match_pattern, count=100)
-            
+
             if keys:
                 # 批量获取 keys 对应的值
                 values = await redis.mget(keys)
-                
+
                 for key, val in zip(keys, values):
                     if val:
                         try:
                             # 兼容 key 返回 bytes 还是 str
                             key_str = key.decode("utf-8") if isinstance(key, bytes) else key
                             data = json.loads(val)
-                            
+
                             # 从 Redis 获取节点持久化配置 (node:config:{node_id})
                             nid = data.get("node_id", key_str.split(":")[-1])
                             config_key = f"node:config:{nid}"
                             config_data = await redis.hgetall(config_key)
-                            
+
                             # bytes -> str decoding map for HGETALL
                             c_data = {k.decode('utf-8') if isinstance(k, bytes) else k: v.decode('utf-8') if isinstance(v, bytes) else v for k, v in config_data.items()}
-                            
+
                             # 旧数据的向后兼容 (如果不存在 config 数据，尝试去取一下旧的 name)
                             custom_name = c_data.get("name")
                             if not custom_name:
@@ -92,17 +92,17 @@ async def get_nodes(
                             logger.warning(f"Failed to parse node status from Redis key {key}: {e}")
                         except ValueError as e:
                             logger.warning(f"Validation error for node status data: {e}")
-            
+
             # 当 cursor 变为 0 (数字或字符串) 时循环结束
             if int(cursor) == 0:
                 break
-                        
+
     except RedisError as e:
         logger.error(f"Redis error when querying node status: {e}")
         # 异常情况返回空列表而不是引发500，以满足高可用和优雅降级
         # 或根据项目需求抛出 HTTPException
         pass
-        
+
     return ApiResponse.success(data=nodes)
 
 @router.post("/{node_id}/config", response_model=ApiResponse)
@@ -116,14 +116,14 @@ async def update_node_config(
 ):
     """修改节点配置字典并持久化到 Redis Hash (遵循只用 POST 原则)"""
     config_key = f"node:config:{node_id}"
-    
+
     mapping = {
         "name": body.name,
         "mac_address": body.mac_address,
         "enabled": "true" if body.enabled else "false",
         "max_runners": str(body.max_runners)
     }
-    
+
     try:
         await redis.hset(config_key, mapping=mapping)
         return ApiResponse.success(message=f"节点 {node_id} 配置已更新")
@@ -143,7 +143,7 @@ async def uninstall_node(
     status_key = f"node:status:{node_id}"
     config_key = f"node:config:{node_id}"
     old_name_key = f"node:name:{node_id}" # 顺手清下遗留数据
-    
+
     try:
         await redis.delete(status_key, config_key, old_name_key)
         return ApiResponse.success(message=f"节点 {node_id} 已成功删除")

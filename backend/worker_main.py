@@ -28,16 +28,16 @@ async def main():
     # 2. 启动后台任务 (例如心跳和队列监听)
     heartbeat_task = await start_heartbeat_task()
     task_listener_task = await start_task_listener()
-    
+
     logger.info("Worker started successfully. Waiting for shutdown signal...")
-    
+
     # 阻塞直到收到退出信号
     await shutdown_event.wait()
-    
+
     logger.info("Worker shutting down...")
     heartbeat_task.cancel()
     task_listener_task.cancel()
-    
+
     # 清理依赖
     await redis_manager.close_pool()
     logger.info("Worker shutdown complete.")
@@ -46,5 +46,5 @@ if __name__ == "__main__":
     # Windows 下如果出现 NotImplementedError 需要配置对应的 event loop policy
     if sys.platform == 'win32':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    
+
     asyncio.run(main())

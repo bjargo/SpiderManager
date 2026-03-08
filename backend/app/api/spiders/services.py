@@ -13,7 +13,7 @@ class SpiderService:
     def create_spider(db: Session, spider_in: SpiderCreate) -> Spider:
         # 序列化 target_nodes 列表为 JSON 字符串进行保存
         target_nodes_str = json.dumps(spider_in.target_nodes) if spider_in.target_nodes else None
-        
+
         db_spider = Spider(
             name=spider_in.name,
             description=spider_in.description,
@@ -51,16 +51,16 @@ class SpiderService:
     @staticmethod
     def update_spider(db: Session, spider_id: int, spider_in: SpiderUpdate) -> Spider:
         db_spider = SpiderService.get_spider(db, spider_id)
-        
+
         update_data = spider_in.dict(exclude_unset=True)
         if "target_nodes" in update_data:
             update_data["target_nodes"] = json.dumps(update_data["target_nodes"]) if update_data["target_nodes"] else None
-            
+
         for key, value in update_data.items():
             setattr(db_spider, key, value)
-            
+
         db_spider.updated_at = now()
-        
+
         try:
             db.add(db_spider)
             db.commit()

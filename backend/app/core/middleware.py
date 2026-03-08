@@ -16,11 +16,11 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         req_token = current_request_ctx.set(request)
         user_token = None
-        
+
         try:
             user = await self._get_user(request)
             user_token = current_user_ctx.set(user)
-            
+
             response = await call_next(request)
             return response
         finally:
@@ -32,10 +32,10 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return None
-            
+
         token = auth_header.split(" ")[1]
         strategy = get_jwt_strategy()
-        
+
         try:
             async with async_session_maker() as session:
                 user_db = SQLAlchemyUserDatabase(session, User)

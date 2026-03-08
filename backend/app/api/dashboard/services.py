@@ -24,8 +24,8 @@ class DashboardService:
         cursor = 0
         match_pattern = "node:status:*"
         online_nodes = 0
-        total_nodes = 0 
-        
+        total_nodes = 0
+
         while True:
             cursor, keys = await redis.scan(cursor=cursor, match=match_pattern, count=100)
             if keys:
@@ -42,11 +42,11 @@ class DashboardService:
                             logger.error(f"Error parsing node status data: {e}", exc_info=True)
             if int(cursor) == 0:
                 break
-                
+
         # 3. Tasks today
         now = now_tz()
         today_start = datetime(now.year, now.month, now.day)
-        
+
         # 今日任务总数
         tasks_today_query = select(func.count()).select_from(SpiderTask).where(
             SpiderTask.created_at >= today_start
@@ -78,7 +78,7 @@ class DashboardService:
         now = now_tz()
         today = datetime(now.year, now.month, now.day)
         last_7_days_start = today - timedelta(days=6)
-        
+
         days_map = {}
         ordered_days = []
         for i in range(6, -1, -1):
@@ -86,14 +86,14 @@ class DashboardService:
             date_str = f"{d.month}-{d.day}"
             days_map[d.date()] = {"success": 0, "failure": 0, "date_str": date_str}
             ordered_days.append(d.date())
-            
+
         # 查询最近 7 天的记录
         query = select(SpiderTask.status, SpiderTask.created_at).where(
             SpiderTask.created_at >= last_7_days_start
         )
         result = await session.execute(query)
         tasks = result.all()
-        
+
         for task_status, created_at in tasks:
             if not created_at:
                 continue
@@ -103,11 +103,11 @@ class DashboardService:
                     days_map[task_date]["success"] += 1
                 elif task_status in ["failed", "timeout", "error"]:
                     days_map[task_date]["failure"] += 1
-                    
+
         return [
             TrendData(
-                date=days_map[d]["date_str"], 
-                success=days_map[d]["success"], 
+                date=days_map[d]["date_str"],
+                success=days_map[d]["success"],
                 failure=days_map[d]["failure"]
             )
             for d in ordered_days
@@ -119,15 +119,15 @@ class DashboardService:
         query = select(SpiderTask).order_by(SpiderTask.created_at.desc()).limit(5)
         result = await session.execute(query)
         recent_tasks = result.scalars().all()
-        
+
         result_list = []
         for t in recent_tasks:
             start_str = t.started_at.strftime("%Y-%m-%d %H:%M:%S") if t.started_at else t.created_at.strftime("%Y-%m-%d %H:%M:%S")
             end_str = t.finished_at.strftime("%Y-%m-%d %H:%M:%S") if t.finished_at else None
-            
+
             node_id = t.node_id or "public"
             node_name = f"Node-{node_id[:6]}" if node_id != "public" else "Public Queue"
-            
+
             result_list.append(RecentTask(
                 id=t.task_id,
                 spiderId=t.spider_id,
@@ -137,5 +137,5 @@ class DashboardService:
                 startTime=start_str,
                 endTime=end_str
             ))
-            
+
         return result_list

@@ -18,7 +18,7 @@ class MinioSourceHandler(SourceHandler):
         try:
             # minio_manager 客户端的方法
             data = minio_manager.download_file(url)
-            
+
             # 提取 ZIP 内容
             with zipfile.ZipFile(BytesIO(data)) as zf:
                 zf.extractall(dest_dir)
@@ -41,14 +41,14 @@ class MinioSourceHandler(SourceHandler):
                 for file in files:
                     file_path = os.path.join(root, file)
                     rel_path = os.path.relpath(file_path, local_path)
-                    
+
                     # 混入相对路径确保位置变动也能导致 Hash 变动
                     sha256.update(rel_path.encode('utf-8'))
-                    
+
                     with open(file_path, 'rb') as f:
                         while chunk := f.read(8192):
                             sha256.update(chunk)
-            
+
             version_hash = sha256.hexdigest()
             logger.info(f"Calculated version hash for {local_path}: {version_hash}")
             return version_hash

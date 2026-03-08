@@ -7,7 +7,7 @@ from app.core.timezone import now
 
 
 class Spider(SQLModel, table=True):
-    __tablename__ = "spiders"
+    __tablename__ = "spiders"  # pyright: ignore[reportAssignmentType]
 
     id: Optional[int] = Field(default=None, primary_key=True)
     project_id: str = Field(index=True, description="关联全局项目ID (用于拉取代码)")

@@ -1,0 +1,46 @@
+{
+  "include": [
+    "."
+  ],
+  "exclude": [
+    "**/.venv",
+    "**/venv",
+    "**/__pycache__",
+    "**/.git",
+    "**/node_modules"
+  ],
+  "ignore": [
+    "**/.venv",
+    "**/venv"
+  ],
+  "stubPath": "",
+  "venv": ".venv",
+  "pythonVersion": "3.14",
+  "pythonPlatform": "Windows",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": [
+        "."
+      ]
+    }
+  ],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "warning",
+  "reportMissingTypeStubs": "none",
+  "reportUnusedImport": "none",
+  "reportUnusedVariable": "none",
+  "reportGeneralTypeIssues": "warning",
+  "reportOptionalMemberAccess": "warning",
+  "reportOptionalSubscript": "warning",
+  "reportOptionalOperand": "warning",
+  "reportOptionalCall": "warning",
+  "reportOptionalIterable": "warning",
+  "reportOptionalContextManager": "warning",
+  "strictListInference": false,
+  "strictDictionaryInference": false,
+  "strictSetInference": false,
+  "strictParameterNoneValue": false,
+  "enableTypeIgnoreComments": true,
+  "disableBytesTypePromotions": false
+}

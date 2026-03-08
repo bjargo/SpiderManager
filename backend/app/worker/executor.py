@@ -127,23 +127,23 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
             handler = SourceFactory.get_handler(source_type)
             version_hash: str | None = None
             cached_image_tag: str | None = None
-            
+
             # ── 2a. 尝试远程指纹探测 (Remote Probing) ──
             try:
                 # 获取任务自带的构建参数 (包含 branch 等信息)
                 source_kwargs = task_data.get("source_kwargs", {})
                 remote_fingerprint = await asyncio.to_thread(handler.get_remote_fingerprint, source_url, **source_kwargs)
-                
+
                 if remote_fingerprint:
                     version_hash = remote_fingerprint  # 复用远程指纹，消除冗余哈希 [ZERO-DOWNLOAD]
-                    
+
                     # 提前计算镜像标签
                     script_hash = hashlib.sha256(script_path.encode()).hexdigest()[:8]
                     predict_tag = f"spider-{project_id}-{language.replace(':', '-')}:{version_hash[:12]}-{script_hash}"
-                    
+
                     if redis_manager.client:
                         await redis_manager.client.publish(channel, f"[SYSTEM: Remote fingerprint detected: {version_hash[:12]}]")
-                    
+
                     # 检查镜像是否存在 (Cache Hit)
                     if await asyncio.to_thread(image_manager.check_image_exists, predict_tag):
                         cached_image_tag = predict_tag
@@ -167,13 +167,13 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                 # 组合最终标签
                 script_hash = hashlib.sha256(script_path.encode()).hexdigest()[:8]
                 image_tag = f"spider-{project_id}-{language.replace(':', '-')}:{version_hash[:12]}-{script_hash}"
-                
+
                 if redis_manager.client:
                     await redis_manager.client.publish(channel, f"[SYSTEM: Source Hash: {version_hash[:12]}, Image Tag: {image_tag}]")
                     await redis_manager.client.publish(channel, f"[SYSTEM: Building image...]")
-                
+
                 build_args = task_data.get("build_args", {})
-                
+
                 # 构建镜像
                 final_image_tag = await asyncio.to_thread(
                     image_manager.build_image,
@@ -187,7 +187,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
             else:
                 # 直接使用缓存项
                 task_data["image_tag"] = cached_image_tag
-            
+
             if redis_manager.client:
                 await redis_manager.client.publish(channel, f"[SYSTEM: Image {task_data.get('image_tag')} ready. Launching container...]")
 
@@ -220,7 +220,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
             except Exception as read_err:
                 logger.warning("Error reading container logs: %s", read_err)
                 break
-            
+
             if raw_chunk is None:
                 break
 
@@ -265,7 +265,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                         break
                 except Exception as e:
                     logger.error("Error checking kill signal for task %s: %s", task_id, e)
-            
+
             if killed_by_user:
                 break
 
@@ -321,7 +321,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
             error_status = {"task_id": task_id, "status": "error", "node_id": NODE_ID, "error_detail": str(e)}
             await redis_manager.client.set(status_key, json.dumps(error_status), ex=7 * 24 * 3600)
             await redis_manager.client.publish(channel, f"[SYSTEM: Task failed with unexpected error: {e}]")
-        
+
         # 确保关键错误也被记录到 TaskLog 表中
         await _flush_logs(task_id, [f"[SYSTEM: Unexpected error: {e}]"])
         await _update_task_status(task_id, "error", error_detail=str(e), finished_at=timezone.now())
@@ -331,7 +331,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
         await asyncio.to_thread(docker_mgr.remove_container, container_name, force=True)
         # 异步关闭 Docker 客户端
         await asyncio.to_thread(docker_mgr.close)
-        
+
         # 显式清理为了构建镜像临时下载的源码目录 (同步 IO 放入线程)
         if project_dir and os.path.exists(project_dir):
             try:
@@ -477,7 +477,7 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
                                 process.wait(timeout=3)
                             except subprocess.TimeoutExpired:
                                 process.kill()
-                            
+
                             await redis_manager.client.delete(kill_key)
                             killed_by_user = True
                             final_status = "cancelled"
@@ -609,24 +609,24 @@ async def listen_for_tasks() -> None:
     """监听专属队列和公共队列的主循环"""
     node_queue_key = f"{settings.NODE_QUEUE_PREFIX}{NODE_ID}"
     logger.info(f"Worker {NODE_ID} starting to listen for tasks on {node_queue_key} and {settings.PUBLIC_QUEUE_KEY}...")
-    
+
     while True:
         try:
             if not redis_manager.client:
                 await asyncio.sleep(1)
                 continue
-                
+
             # 使用 BLPOP 阻塞监听多个队列，优先监听专属队列
             result = await redis_manager.client.blpop([node_queue_key, settings.PUBLIC_QUEUE_KEY], timeout=5)
-            
+
             if result:
                 queue_name, task_json = result
                 # 兼容 str/bytes 返回值
                 queue_name_str = queue_name.decode("utf-8") if isinstance(queue_name, bytes) else queue_name
                 task_str = task_json.decode("utf-8") if isinstance(task_json, bytes) else task_json
-                
+
                 logger.info(f"Received task from {queue_name_str}")
-                
+
                 try:
                     task_data = json.loads(task_str)
                     # 将任务执行放入后台，以免单个任务阻塞 Worker 继续消费队列
@@ -640,11 +640,11 @@ async def listen_for_tasks() -> None:
         except (ConnectionError, RedisError) as e:
             logger.error("Redis error while waiting for tasks: %s", e)
             await asyncio.sleep(2)
-            
+
         except asyncio.CancelledError:
             logger.info("Task listener cancelled. Shutting down...")
             break
-            
+
         except Exception as e:
             logger.error(f"Unexpected error in task listener: {e}")
             await asyncio.sleep(1)

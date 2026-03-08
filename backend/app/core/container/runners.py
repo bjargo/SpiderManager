@@ -21,7 +21,7 @@ class BaseRunner(ABC):
         dockerfile_path = os.path.join(local_path, "Dockerfile")
         with open(dockerfile_path, "w", encoding="utf-8") as f:
             f.write(self.get_dockerfile_content(context_vars))
-            
+
         # 写入 .dockerignore
         dockerignore_path = os.path.join(local_path, ".dockerignore")
         if not os.path.exists(dockerignore_path):
@@ -59,12 +59,12 @@ class RunnerFactory:
         """动态扫描 runtimes 目录并注册所有符合规范的插件"""
         if cls._is_initialized:
             return
-            
+
         cls._runners_cache.clear()
-        
+
         base_dir = os.path.dirname(os.path.abspath(__file__))
         runtimes_dir = os.path.join(base_dir, "runtimes")
-        
+
         if not os.path.exists(runtimes_dir):
             cls._is_initialized = True
             return
@@ -73,15 +73,15 @@ class RunnerFactory:
             plugin_dir = os.path.join(runtimes_dir, entry)
             if not os.path.isdir(plugin_dir):
                 continue
-                
+
             manifest_path = os.path.join(plugin_dir, "manifest.json")
             if not os.path.exists(manifest_path):
                 continue
-                
+
             try:
                 with open(manifest_path, "r", encoding="utf-8") as f:
                     manifest = json.load(f)
-                    
+
                 aliases = manifest.get("aliases", [])
                 runner = PluginRunner(plugin_dir)
                 for alias in aliases:
@@ -99,12 +99,12 @@ class RunnerFactory:
         """
         cls._initialize_registry()
         lang_key = language.lower().split(':')[0]
-        
+
         if lang_key in cls._runners_cache:
             return cls._runners_cache[lang_key]
-        
+
         # 尝试返回兜底的 default runner，如果也没有就报错。
         if "default" in cls._runners_cache:
             return cls._runners_cache["default"]
-            
+
         raise ValueError(f"No configured runner or default plugin for language: {language}")

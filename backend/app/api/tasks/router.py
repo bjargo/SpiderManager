@@ -125,7 +125,7 @@ async def get_all_tasks(
         if task_id:
             query = query.where(SpiderTask.task_id == task_id)
             count_query = count_query.where(SpiderTask.task_id == task_id)
-        
+
         # ── Time filtering ──
         # asyncpg 对参数类型推断严格，必须传 datetime 对象而非字符串，
         # 否则会绑定为 VARCHAR 导致与 TIMESTAMP 列比较时类型错误。
@@ -254,7 +254,7 @@ async def delete_task(
         select(SpiderTask).where(SpiderTask.task_id == task_id)
     )
     task = result.scalars().first()
-    
+
     if task:
         spider = await session.get(Spider, task.spider_id)
         if spider:
@@ -631,7 +631,7 @@ async def get_cron_tasks():
             # 只返回有关联 spider_id 的任务，过滤掉系统内置任务（如 daily_image_prune）
             if "spider_id" not in kwargs:
                 continue
-                
+
             resp = _build_cron_response(job)
             resp.spider_name = spider_name_map.get(resp.spider_id, "")
             response_list.append(resp)
@@ -663,7 +663,7 @@ async def delete_cron_task(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"定时任务未找到或删除失败"
             )
-        
+
         scheduler.remove_job(job_id)
 
         logger.info(f"Cron task {job_id} removed successfully")

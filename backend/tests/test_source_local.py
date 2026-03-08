@@ -11,21 +11,21 @@ def test_git():
     handler = GitSourceHandler()
     url = "https://github.com/octocat/Hello-World.git"
     dest = "./temp_git_repo"
-    
+
     if os.path.exists(dest):
         import stat
         def remove_readonly(func, path, excinfo):
             os.chmod(path, stat.S_IWRITE)
             func(path)
         shutil.rmtree(dest, onerror=remove_readonly)
-        
+
     print(f"Fetching from git... URL: {url}")
     handler.fetch(url, dest)
-    
+
     print("Calculating hash...")
     hash_val = handler.get_version_hash(dest)
     print(f"Git Version Hash: {hash_val}")
-    
+
     if os.path.exists(dest):
         import stat
         def remove_readonly(func, path, excinfo):

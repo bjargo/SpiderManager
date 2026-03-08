@@ -14,7 +14,7 @@ class ImageManager:
     2. 基于模板生成 Dockerfile 和 .dockerignore。
     3. 调用 Docker Engine 进行构建。
     """
-    
+
     def __init__(self):
         self._docker_client = None
 
@@ -75,14 +75,14 @@ class ImageManager:
         """
         if build_args is None:
             build_args = {}
-            
+
         # 1. 检查是否存在，如果存在直接返回
         if self.check_image_exists(image_tag):
             return image_tag
 
         # 2. 准备 Dockerfile 和上下文环境
         runner = RunnerFactory.get_runner(language)
-        
+
         # 强制打平目录结构
         flattened_dir = self._flatten_directory(local_path)
         if flattened_dir and entrypoint:
@@ -124,15 +124,15 @@ class ImageManager:
                 rm=True,  # 构建成功后删除中间容器
                 forcerm=True # 出错也删除
             )
-            
+
             # 记录构建日志，方便调试
             for chunk in build_logs:
                 if 'stream' in chunk:
                     logger.debug(chunk['stream'].strip())
-                    
+
             logger.info(f"Successfully built image: {image_tag}")
             return image_tag
-            
+
         except BuildError as e:
             # 提取完整的构建日志
             log_msgs = ""
@@ -154,9 +154,9 @@ class ImageManager:
         """
         import time
         from datetime import datetime, timezone
-        
+
         pruned_stats = {"dangling_deleted": 0, "dangling_space_reclaimed": 0, "spider_images_deleted": 0}
-        
+
         # 1. 自动清理没有任何 tag 的游离层 (Dangling images)
         try:
             dangling_result = self.docker_client.images.prune(filters={'dangling': True})
@@ -172,7 +172,7 @@ class ImageManager:
             # 获取所有以 spider- 开头的镜像
             spider_images = self.docker_client.images.list(filters={'reference': 'spider-*'})
             now = datetime.now(timezone.utc)
-            
+
             for img in spider_images:
                 # Docker API 返回的时间格式，如 "2023-10-27T10:15:30.123456789Z"
                 # docker-py 的 attrs['Created'] 可能会返回带纳秒时间的字符串，需要处理
@@ -184,7 +184,7 @@ class ImageManager:
                         time_part = time_part[:19] # 如果遇到奇怪格式强行截断为 YYYY-MM-DDTHH:MM:SS
                     created_date = datetime.strptime(time_part, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
                     delta = now - created_date
-                    
+
                     if delta.days >= days_old:
                         # 删除过期镜像
                         logger.info(f"Removing old spider image: {img.tags}")
@@ -196,7 +196,7 @@ class ImageManager:
                             logger.error(f"Failed to remove old image {img.tags}: {rm_err}")
                 except Exception as parse_err:
                     logger.warning(f"Failed to parse creation date for image {img.tags} ({created_str}): {parse_err}")
-                    
+
         except Exception as e:
             logger.error(f"Error checking and pruning old spider images: {e}")
 

@@ -32,14 +32,14 @@ async def list_projects(
     operator: User = Depends(require_viewer),
 ):
     stmt = select(Project).where(Project.is_deleted == False).order_by(Project.id.desc())
-    
+
     result_projects = await session.execute(stmt)
     projects = result_projects.scalars().all()
 
     result: List[ProjectOut] = []
     for p in projects:
         count_stmt = select(func.count()).where(Spider.project_id == p.project_id, Spider.is_deleted == False)
-        
+
         count_result = await session.execute(count_stmt)
         spider_count = count_result.scalar_one()
         result.append(ProjectOut(
@@ -102,7 +102,7 @@ async def update_project(
     db_project = result.scalars().first()
     if not db_project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
-        
+
     verify_resource_owner(db_project.owner_id, operator, resource_name="项目")
 
     if body.name is not None:
@@ -147,7 +147,7 @@ async def delete_project(
     db_project = result.scalars().first()
     if not db_project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
-        
+
     verify_resource_owner(db_project.owner_id, operator, resource_name="项目")
 
     spiders_result = await session.execute(

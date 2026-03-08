@@ -13,7 +13,7 @@ class NodeStatus(BaseModel):
     memory_used_mb: int = Field(..., description="已使用内存大小(MB)")
     last_heartbeat: str = Field(..., description="最后心跳时间 (ISO格式)")
     status: str = Field(..., description="节点状态 (online/offline)")
-    
+
     # 扩展配置字段 (Hash 存储)
     mac_address: str = Field("", description="物理MAC地址")
     enabled: bool = Field(True, description="是否启用 (禁用后不再接收任务)")

@@ -18,7 +18,7 @@ class MessagesService:
         # 初步的业务校验（如判断接收用户是否存在等，依赖后续其它模块的对接，暂时仅抛出异常模板）
         if message_data.receiver_id <= 0:
             raise HTTPException(status_code=400, detail="Invalid receiver ID")
-            
+
         return crud.MessagesCRUD.create_message(db=db, message_in=message_data)
 
     @staticmethod
@@ -38,10 +38,10 @@ class MessagesService:
         message = crud.MessagesCRUD.get_message_by_id(db=db, message_id=message_id)
         if not message:
             raise HTTPException(status_code=404, detail="Message not found")
-        
+
         updated_message = crud.MessagesCRUD.update_message_status(
-            db=db, 
-            message_id=message_id, 
+            db=db,
+            message_id=message_id,
             status_update=schemas.SystemMessageUpdate(is_read=True)
         )
         return updated_message

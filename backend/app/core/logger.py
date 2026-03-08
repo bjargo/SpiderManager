@@ -49,7 +49,7 @@ def setup_logging() -> None:
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_tb)
             return
-        
+
         # 进程级异常同样进行精简处理
         _app_logger.error("Uncaught process-level exception", exc_info=(exc_type, exc_value, exc_tb))
 
@@ -72,7 +72,7 @@ def bind_app(app: "FastAPI") -> None:
         frames = traceback.extract_tb(tb)
         # 只保留不包含 'site-packages' 的帧（即你自己的项目代码）
         clean_frames = [f for f in frames if "site-packages" not in f.filename]
-        
+
         if clean_frames:
             # 格式化过滤后的堆栈
             readable_traceback = "".join(traceback.format_list(clean_frames))
@@ -86,8 +86,8 @@ def bind_app(app: "FastAPI") -> None:
             "Business Traceback:\n%s"
             "Error Type: %s\n"
             "Error Detail: %s",
-            request.method, 
-            request.url.path, 
+            request.method,
+            request.url.path,
             readable_traceback,
             type(exc).__name__,
             str(exc)
@@ -97,8 +97,8 @@ def bind_app(app: "FastAPI") -> None:
         return JSONResponse(
             status_code=500,
             content={
-                "code": 500, 
-                "message": "Internal Server Error", 
+                "code": 500,
+                "message": "Internal Server Error",
                 "detail": str(exc) if os.getenv("DEBUG") else "Please contact admin"
             },
         )
