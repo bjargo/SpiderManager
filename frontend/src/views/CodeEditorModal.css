@@ -565,3 +565,48 @@
     border-radius: 4px;
     font-weight: 500;
 }
+
+/* =================================================
+   强制暗黑覆盖（解决 light-theme 下较高优先级的 CSS 冲突）
+   ================================================= */
+:root.light-theme .ce-header {
+    background: #1a1b2e !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root.light-theme .ce-sidebar {
+    background: #1a1d24 !important;
+    border-right-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root.light-theme .ce-sidebar-header {
+    background: #1a1d24 !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root.light-theme .ce-status-bar {
+    background: #1a1d24 !important;
+    border-top-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root.light-theme .ce-file-path,
+:root.light-theme .ce-file-create-input {
+    background: rgba(0, 0, 0, 0.25) !important;
+}
+
+:root.light-theme .ce-file-create-row,
+:root.light-theme .ce-file-item:hover,
+:root.light-theme .ce-tree-dir:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+:root.light-theme .ce-btn-close {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: #94a3b8 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root.light-theme .ce-btn-close:hover {
+    background: rgba(0, 0, 0, 0.25) !important;
+    color: #e2e8f0 !important;
+}

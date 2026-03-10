@@ -203,7 +203,7 @@
 }
 
 .sch-table th {
-    text-align: left;
+    text-align: center;
     padding: 14px 20px;
     font-size: 0.72rem;
     color: var(--text-muted);
@@ -219,6 +219,7 @@
     color: var(--text-primary);
     border-bottom: 1px solid var(--border-color);
     vertical-align: middle;
+    text-align: center;
 }
 
 .sch-table tr:hover td {
@@ -237,6 +238,7 @@
 .sch-spider-cell {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
 }
 
@@ -274,6 +276,7 @@
 .sch-node-tags {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 6px;
 }
 
@@ -314,10 +317,9 @@
 
 /* 操作列 */
 .sch-actions-cell {
-    text-align: right;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: center;
     gap: 4px;
 }
 

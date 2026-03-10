@@ -74,7 +74,6 @@
 .spider-table {
     width: 100%;
     border-collapse: collapse;
-    text-align: left;
 }
 
 .spider-table th {
@@ -84,12 +83,14 @@
     font-weight: 500;
     color: var(--text-color-secondary);
     border-bottom: 1px solid var(--border-color);
+    text-align: center;
 }
 
 .spider-table td {
     padding: 16px;
     border-bottom: 1px solid var(--border-color);
     vertical-align: middle;
+    text-align: center;
 }
 
 .spider-table tr:hover {
@@ -100,6 +101,7 @@
 .status-cell {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
 }
 
@@ -151,6 +153,7 @@
 .node-id-cell {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 4px;
 }
 
@@ -303,6 +306,7 @@
 .detail-tags-cell {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 8px;
 }
 

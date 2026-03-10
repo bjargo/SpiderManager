@@ -24,3 +24,7 @@ export const deleteTask = (taskId: string): Promise<ApiResponse<any>> => {
 export const fetchTaskLogs = (taskId: string): Promise<ApiResponse<any>> => {
     return request.get(`/tasks/${taskId}/logs`);
 };
+
+export const fetchTaskData = (taskId: string, skip: number = 0, limit: number = 100): Promise<ApiResponse<any>> => {
+    return request.get(`/tasks/${taskId}/data`, { params: { skip, limit } });
+};

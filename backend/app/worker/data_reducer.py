@@ -245,32 +245,38 @@ async def data_reducer_worker() -> None:
                     continue
 
                 table_name: str = msg.get("t", "")
-                data_rows: list[dict[str, Any]] = msg.get("d", [])
+                data_rows = msg.get("d", [])
+                if not isinstance(data_rows, list):
+                    # 如果传进来的是单个 dict，包成 list
+                    data_rows = [data_rows]
                 task_id: str = msg.get("task_id", "unknown")
 
                 if not table_name or not data_rows:
                     logger.warning("Empty table_name or data in message, skipped")
-                    continue
+                    pass # Don't continue, let flush run if needed
+                else:
+                    # ── 1. 实时 Pub/Sub 分发 ──
+                    try:
+                        channel = f"data:channel:{task_id}"
+                        # 注意: 要发单条数据还是数组？前端期望是一个完整的消息结构，或者前端期望 DataItem
+                        # ingest_data 接口收到 body.data,
+                        # 前端 ws.onmessage = (event) => rawMsg.d || rawMsg.data
+                        # 这里分发全量消息体
+                        await redis_manager.client.publish(channel, msg_str)
+                    except RedisError as e:
+                        logger.warning("Failed to publish data to channel for task %s: %s", task_id, e)
 
-                # ── 1. 实时 Pub/Sub 分发 ──
-                try:
-                    channel = f"data:channel:{task_id}"
-                    await redis_manager.client.publish(channel, msg_str)
-                except RedisError as e:
-                    # Pub/Sub 失败不影响入库流程
-                    logger.warning("Failed to publish data to channel for task %s: %s", task_id, e)
+                    # ── 2. 缓冲区聚合 ──
+                    if table_name not in buffer:
+                        buffer[table_name] = TableBuffer()
 
-                # ── 2. 缓冲区聚合 ──
-                if table_name not in buffer:
-                    buffer[table_name] = TableBuffer()
+                    table_buf = buffer[table_name]
+                    table_buf.task_id = task_id
 
-                table_buf = buffer[table_name]
-                table_buf.task_id = task_id
-
-                for row in data_rows:
-                    if isinstance(row, dict):
-                        table_buf.rows.append(row)
-                        total_pending += 1
+                    for row in data_rows:
+                        if isinstance(row, dict):
+                            table_buf.rows.append(row)
+                            total_pending += 1
 
             # ── 3. 判断是否需要 Flush ──
             now = time.time()

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Play, Bug, Clock, Server, Activity, StopCircle, RefreshCw, Terminal, CheckCircle, XCircle, Trash2, FileText } from 'lucide-react';
+import { Play, Bug, Clock, Server, Activity, StopCircle, RefreshCw, Terminal, CheckCircle, XCircle, Trash2, FileText, Database } from 'lucide-react';
 import { fetchTaskList, stopTask, deleteTask } from '@/api/task';
 import { fetchSpiderList } from '@/api/spider';
 import { fetchNodeList } from '@/api/node';
@@ -60,6 +60,7 @@ export default function TaskManagement() {
     const limit = 20;
 
     const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'logs' | 'data'>('logs');
     const [stoppingId, setStoppingId] = useState<string | null>(null);
     const [isUrlParamsParsed, setIsUrlParamsParsed] = useState(false);
 
@@ -354,7 +355,7 @@ export default function TaskManagement() {
                                         <td>{getStatusBadge(task.status)}</td>
                                         <td className="tm-node">
                                             {task.node_id ? (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                                                     <Server size={14} />
                                                     <span>{nodes.find(n => n.node_id === task.node_id)?.name || task.node_id}</span>
                                                     {(() => {
@@ -382,8 +383,15 @@ export default function TaskManagement() {
                                         <td>
                                             <div className="tm-actions">
                                                 <button
+                                                    className="tm-action-btn data"
+                                                    onClick={(e) => { e.stopPropagation(); setActiveTaskId(task.task_id); setActiveTab('data'); }}
+                                                    title="查看数据"
+                                                >
+                                                    <Database size={14} /> 数据
+                                                </button>
+                                                <button
                                                     className="tm-action-btn log"
-                                                    onClick={(e) => { e.stopPropagation(); setActiveTaskId(task.task_id); }}
+                                                    onClick={(e) => { e.stopPropagation(); setActiveTaskId(task.task_id); setActiveTab('logs'); }}
                                                     title="查看日志"
                                                 >
                                                     <FileText size={14} /> 日志
@@ -438,6 +446,7 @@ export default function TaskManagement() {
                             <LogTerminal
                                 taskId={activeTaskId}
                                 taskStatus={tasks.find(t => t.task_id === activeTaskId)?.status}
+                                defaultTab={activeTab}
                                 onStop={async (tid) => {
                                     await stopTask(tid);
                                     loadTasks();

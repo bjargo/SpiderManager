@@ -110,8 +110,35 @@ export default function AuditLogsView() {
         }
     };
 
+    // 选项常量
+    const ACTIONS = [
+        { value: '', label: '全部动作' },
+        { value: 'CREATE', label: 'CREATE - 创建' },
+        { value: 'UPDATE', label: 'UPDATE - 更新' },
+        { value: 'DELETE', label: 'DELETE - 删除' },
+        { value: 'RUN', label: 'RUN - 运行' },
+        { value: 'STOP', label: 'STOP - 停止' },
+        { value: 'LOGIN', label: 'LOGIN - 登录' },
+        { value: 'LOGOUT', label: 'LOGOUT - 登出' },
+        { value: 'STATUS', label: 'STATUS - 状态变更' },
+        { value: 'SAVE_FILE', label: 'SAVE_FILE - 保存文件' },
+        { value: 'CREATE_FILE', label: 'CREATE_FILE - 创建文件' },
+        { value: 'DELETE_FILE', label: 'DELETE_FILE - 删除文件' },
+    ];
+
+    const RESOURCE_TYPES = [
+        { value: '', label: '全部类型' },
+        { value: 'spider', label: 'Spider - 爬虫' },
+        { value: 'project', label: 'Project - 项目' },
+        { value: 'task', label: 'Task - 任务' },
+        { value: 'schedule', label: 'Schedule - 调度' },
+        { value: 'file', label: 'File - 爬虫文件' },
+        { value: 'node', label: 'Node - 节点' },
+        { value: 'user', label: 'User - 用户' },
+    ];
+
     return (
-        <div className="al-container">
+        <div className="al-container animate-fade-in">
             {/* 标题栏 */}
             <div className="al-toolbar glass-panel">
                 <div className="al-toolbar-left">
@@ -131,30 +158,39 @@ export default function AuditLogsView() {
             </div>
 
             {/* 筛选栏 */}
-            <div className="al-filter glass-panel">
+            <div className="al-filter glass-panel animate-slide-up">
                 <div className="al-filter-row">
                     <div className="al-filter-item">
                         <label>操作动作</label>
-                        <input
-                            type="text"
+                        <select
+                            className="al-input-base"
                             value={filterAction}
                             onChange={e => setFilterAction(e.target.value)}
-                            placeholder="CREATE / DELETE / LOGIN..."
-                        />
+                            style={{ cursor: 'pointer' }}
+                        >
+                            {ACTIONS.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
                     </div>
                     <div className="al-filter-item">
                         <label>资源类型</label>
-                        <input
-                            type="text"
+                        <select
+                            className="al-input-base"
                             value={filterResource}
                             onChange={e => setFilterResource(e.target.value)}
-                            placeholder="spider / project / user..."
-                        />
+                            style={{ cursor: 'pointer' }}
+                        >
+                            {RESOURCE_TYPES.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
                     </div>
                     <div className="al-filter-item">
                         <label>开始时间</label>
                         <input
                             type="datetime-local"
+                            className="al-input-base"
                             value={filterStartTime}
                             onChange={e => setFilterStartTime(e.target.value)}
                         />
@@ -163,6 +199,7 @@ export default function AuditLogsView() {
                         <label>截止时间</label>
                         <input
                             type="datetime-local"
+                            className="al-input-base"
                             value={filterEndTime}
                             onChange={e => setFilterEndTime(e.target.value)}
                         />
@@ -210,8 +247,8 @@ export default function AuditLogsView() {
                                 {logs.map(log => (
                                     <tr key={log.id}>
                                         <td className="al-id">{log.id}</td>
-                                        <td className="al-mono al-truncate" title={log.operator_id}>
-                                            {log.operator_id.slice(0, 8)}…
+                                        <td className="al-operator-email" title={log.operator_id}>
+                                            {log.operator_email}
                                         </td>
                                         <td>
                                             <span className={`al-role al-role-${log.role}`}>{log.role}</span>

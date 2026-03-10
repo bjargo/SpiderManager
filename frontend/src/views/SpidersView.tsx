@@ -569,7 +569,7 @@ function RunSpiderModal({ spider, nodes, onClose, showToast }: RunModalProps) {
 
                 <div className="sv-modal-body">
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 16 }}>
-                        爬虫：<strong style={{ color: '#fff' }}>{spider.name}</strong>
+                        爬虫：<strong style={{ color: 'var(--text-primary)' }}>{spider.name}</strong>
                     </p>
 
                     <div className="sv-field">
@@ -590,7 +590,7 @@ function RunSpiderModal({ spider, nodes, onClose, showToast }: RunModalProps) {
                                             padding: '10px 14px',
                                             border: `1px solid ${selectedNodes.includes(node.node_id) ? 'var(--accent-primary)' : 'var(--border-color)'}`,
                                             borderRadius: 8,
-                                            background: selectedNodes.includes(node.node_id) ? 'rgba(59,130,246,0.08)' : 'rgba(255,255,255,0.02)',
+                                            background: selectedNodes.includes(node.node_id) ? 'rgba(59,130,246,0.08)' : 'var(--bg-input)',
                                             cursor: 'pointer',
                                             transition: 'all 0.15s',
                                             fontSize: '0.85rem',
@@ -603,7 +603,7 @@ function RunSpiderModal({ spider, nodes, onClose, showToast }: RunModalProps) {
                                             style={{ accentColor: 'var(--accent-primary)' }}
                                         />
                                         <span className="sv-node-dot" style={{ background: node.status === 'online' ? '#4ade80' : '#f87171' }} />
-                                        <span style={{ fontWeight: 500, color: '#fff' }}>
+                                        <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
                                             {node.name || node.node_id}
                                         </span>
                                         <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>

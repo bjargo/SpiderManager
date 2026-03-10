@@ -472,7 +472,7 @@ export default function CodeEditorModal({ spider, onClose, showToast }: CodeEdit
 
     return (
         <div className="ce-overlay" onClick={onClose}>
-            <div className="ce-container glass-panel" onClick={e => e.stopPropagation()}>
+            <div className="ce-container" onClick={e => e.stopPropagation()}>
                 {/* 顶部工具栏 */}
                 <div className="ce-header">
                     <div className="ce-header-left">

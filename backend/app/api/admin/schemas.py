@@ -48,6 +48,7 @@ class AuditLogOut(BaseModel):
     """审计日志单条输出 Schema。"""
     id: int
     operator_id: uuid.UUID
+    operator_email: Optional[str] = None  # 动态关联到的邮箱
     role: str
     action: str
     resource_type: str

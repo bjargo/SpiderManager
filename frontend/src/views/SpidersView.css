@@ -176,7 +176,7 @@
 }
 
 .sv-table th {
-    text-align: left;
+    text-align: center;
     padding: 14px 16px;
     color: var(--text-secondary);
     font-weight: 500;
@@ -190,6 +190,7 @@
     border-bottom: 1px solid var(--border-color);
     color: var(--text-primary);
     vertical-align: middle;
+    text-align: center;
 }
 
 .sv-table tbody tr {
@@ -205,13 +206,17 @@
     color: var(--text-primary);
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    margin: 0 auto;
 }
 
 .sv-source-url {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     max-width: 280px;
+    margin: 0 auto;
 }
 
 .sv-url-text {
@@ -247,6 +252,7 @@
 .sv-ops {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
 }
 
@@ -420,7 +426,7 @@
     font-weight: 500;
 }
 
-.sv-field input,
+.sv-field input:not([type="checkbox"]),
 .sv-field textarea,
 .sv-field select {
     width: 100%;
@@ -524,7 +530,7 @@
     font-weight: 500;
 }
 
-.sv-field input:focus,
+.sv-field input:not([type="checkbox"]):focus,
 .sv-field textarea:focus,
 .sv-field select:focus {
     border-color: var(--accent-primary);

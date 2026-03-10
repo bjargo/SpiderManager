@@ -1,4 +1,4 @@
-.log-terminal-wrapper {
+.data-terminal-wrapper {
     background: var(--bg-primary);
     border-radius: 12px;
     border: 1px solid var(--border-color);
@@ -9,7 +9,7 @@
     box-shadow: 0 20px 40px var(--shadow-color);
 }
 
-.term-header {
+.data-term-header {
     height: 48px;
     display: flex;
     align-items: center;
@@ -19,65 +19,7 @@
     border-bottom: 1px solid var(--border-color);
 }
 
-.term-tabs {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.term-tab {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.term-tab:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-}
-
-.term-tab.active {
-    background: var(--bg-hover);
-    color: var(--accent-primary);
-}
-
-.term-tab-status {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 8px;
-    background: var(--bg-primary);
-    border-radius: 12px;
-    font-size: 10px;
-    font-weight: 600;
-}
-
-.term-tab-status.connected .status-dot-blink {
-    background: #10b981;
-    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
-}
-
-.term-tab-status.connecting .status-dot-blink {
-    background: #f59e0b;
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
-    animation: pulse 1.5s infinite;
-}
-
-.term-tab-status.error .status-dot-blink,
-.term-tab-status.closed .status-dot-blink {
-    background: #ef4444;
-}
-
-.term-info {
+.data-term-info {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -86,7 +28,7 @@
     font-weight: 500;
 }
 
-.term-status {
+.data-term-status {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -96,35 +38,29 @@
     font-family: inherit;
 }
 
-.status-dot-blink {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-}
-
-.term-status.connected .status-dot-blink {
+.data-term-status.connected .status-dot-blink {
     background: #10b981;
     box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
 }
 
-.term-status.connecting .status-dot-blink {
+.data-term-status.connecting .status-dot-blink {
     background: #f59e0b;
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
     animation: pulse 1.5s infinite;
 }
 
-.term-status.error .status-dot-blink,
-.term-status.closed .status-dot-blink {
+.data-term-status.error .status-dot-blink,
+.data-term-status.closed .status-dot-blink {
     background: #ef4444;
 }
 
-.term-actions {
+.data-term-actions {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.term-btn {
+.data-term-btn {
     background: transparent;
     border: none;
     color: var(--text-secondary);
@@ -137,82 +73,17 @@
     transition: all 0.2s ease;
 }
 
-.term-btn.stop-btn-red {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    padding: 4px 12px;
-    border-radius: 20px;
-    gap: 6px;
-    margin: 0 4px;
-}
-
-.term-btn.stop-btn-red:hover {
-    background: #ef4444;
-    color: #fff;
-    box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
-}
-
-.term-btn:hover {
+.data-term-btn:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
 }
 
-.term-btn.close:hover {
+.data-term-btn.close:hover {
     background: rgba(239, 68, 68, 0.2);
     color: #ef4444;
 }
 
-.term-body {
-    flex: 1;
-    padding: 16px;
-    overflow-y: auto;
-    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-    font-size: 0.85rem;
-    color: #4ade80;
-    line-height: 1.5;
-    background: var(--bg-primary);
-}
-
-/* Custom terminal scrollbar */
-.term-body::-webkit-scrollbar {
-    width: 6px;
-}
-
-.term-body::-webkit-scrollbar-track {
-    background: var(--bg-primary);
-}
-
-.term-body::-webkit-scrollbar-thumb {
-    background: var(--bg-tertiary);
-    border-radius: 3px;
-}
-
-.term-body::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
-}
-
-.term-empty-state {
-    display: flex;
-    height: 100%;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
-    font-family: monospace;
-}
-
-.term-content {
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-all;
-}
-
-.log-line {
-    margin-bottom: 2px;
-}
-
-/* 分页控制 */
-.term-pagination {
+.data-pagination {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -221,7 +92,7 @@
     border-right: 1px solid var(--border-color);
 }
 
-.term-page-btn {
+.data-page-btn {
     background: var(--bg-hover);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
@@ -234,56 +105,65 @@
     transition: all 0.2s ease;
 }
 
-.term-page-btn:hover:not(:disabled) {
+.data-page-btn:hover:not(:disabled) {
     background: var(--accent-primary);
     border-color: var(--accent-primary);
     color: #fff;
 }
 
-.term-page-btn:disabled {
+.data-page-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-.term-page-info {
+.data-page-info {
     font-size: 12px;
     color: var(--text-secondary);
     min-width: 60px;
     text-align: center;
 }
 
-/* 数据展示区域 */
-.term-data-content {
+.data-term-content {
     flex: 1;
     display: flex;
     overflow: hidden;
 }
 
-.term-data-list {
+.data-term-list {
     flex: 1;
     padding: 12px;
     overflow-y: auto;
     background: var(--bg-primary);
 }
 
-.term-data-list::-webkit-scrollbar {
+.data-term-list::-webkit-scrollbar {
     width: 6px;
 }
 
-.term-data-list::-webkit-scrollbar-track {
+.data-term-list::-webkit-scrollbar-track {
     background: var(--bg-primary);
 }
 
-.term-data-list::-webkit-scrollbar-thumb {
+.data-term-list::-webkit-scrollbar-thumb {
     background: var(--bg-tertiary);
     border-radius: 3px;
 }
 
-.term-data-list::-webkit-scrollbar-thumb:hover {
+.data-term-list::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
 }
 
-.term-data-item {
+.data-term-empty {
+    display: flex;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-family: monospace;
+    font-size: 14px;
+}
+
+.data-item {
     padding: 10px 12px;
     margin-bottom: 8px;
     background: var(--bg-secondary);
@@ -293,36 +173,36 @@
     transition: all 0.2s ease;
 }
 
-.term-data-item:hover {
+.data-item:hover {
     border-color: var(--accent-primary);
     background: var(--bg-hover);
 }
 
-.term-data-item.selected {
+.data-item.selected {
     border-color: var(--accent-primary);
     background: rgba(59, 130, 246, 0.1);
 }
 
-.term-data-item-header {
+.data-item-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 6px;
 }
 
-.term-data-item-index {
+.data-item-index {
     font-size: 11px;
     font-weight: 600;
     color: var(--accent-primary);
     font-family: 'JetBrains Mono', monospace;
 }
 
-.term-data-item-time {
+.data-item-time {
     font-size: 11px;
     color: var(--text-muted);
 }
 
-.term-data-item-preview {
+.data-item-preview {
     font-size: 12px;
     color: var(--text-secondary);
     font-family: 'JetBrains Mono', monospace;
@@ -331,8 +211,8 @@
     text-overflow: ellipsis;
 }
 
-/* 数据详情面板 */
-.term-data-detail {
+/* 详情面板 */
+.data-detail-panel {
     width: 320px;
     border-left: 1px solid var(--border-color);
     background: var(--bg-secondary);
@@ -340,7 +220,7 @@
     flex-direction: column;
 }
 
-.term-data-detail-header {
+.data-detail-header {
     height: 40px;
     display: flex;
     align-items: center;
@@ -352,7 +232,7 @@
     color: var(--text-primary);
 }
 
-.term-data-detail-close {
+.data-detail-close {
     margin-left: auto;
     background: transparent;
     border: none;
@@ -366,12 +246,12 @@
     transition: all 0.2s ease;
 }
 
-.term-data-detail-close:hover {
+.data-detail-close:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
 }
 
-.term-data-detail-content {
+.data-detail-content {
     flex: 1;
     padding: 12px;
     margin: 0;
@@ -385,15 +265,15 @@
     word-break: break-all;
 }
 
-.term-data-detail-content::-webkit-scrollbar {
+.data-detail-content::-webkit-scrollbar {
     width: 6px;
 }
 
-.term-data-detail-content::-webkit-scrollbar-track {
+.data-detail-content::-webkit-scrollbar-track {
     background: var(--bg-secondary);
 }
 
-.term-data-detail-content::-webkit-scrollbar-thumb {
+.data-detail-content::-webkit-scrollbar-thumb {
     background: var(--bg-tertiary);
     border-radius: 3px;
 }

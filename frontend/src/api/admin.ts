@@ -40,6 +40,7 @@ export const adminSetUserStatus = (
 export interface AuditLogItem {
     id: number;
     operator_id: string;
+    operator_email: string; // 新增：操作者邮箱
     role: string;
     action: string;
     resource_type: string;

@@ -6,8 +6,8 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status, Query, Request, BackgroundTasks
 from redis.asyncio import Redis
-from sqlalchemy import select, func, desc
-from app.db.database import get_async_session, async_session_maker
+from sqlalchemy import select, func, desc, text
+from app.db.database import get_async_session, async_session_maker, spider_async_engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from redis.exceptions import RedisError
@@ -357,6 +357,100 @@ async def get_task_logs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch task logs: {str(e)}",
+        )
+
+
+# ─────────────────────────────────────────────────
+# 任务采集数据查询路由
+# ─────────────────────────────────────────────────
+
+@router.get("/{task_id}/data", response_model=ApiResponse, summary="查询任务采集数据")
+async def get_task_data(
+    task_id: str,
+    table_name: str | None = Query(None, description="数据表名，不传则自动查询任务关联的表"),
+    skip: int = Query(0, description="跳过记录数"),
+    limit: int = Query(100, description="返回记录数，最大500"),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    查询指定任务采集的数据记录。
+    支持分页查询，数据以 JSONB 格式存储在动态创建的表中。
+    """
+    # 限制最大返回数量
+    limit = min(limit, 500)
+
+    try:
+        # 1. 查询任务信息，获取 spider_name 作为默认表名
+        task_result = await session.execute(
+            select(SpiderTask).where(SpiderTask.task_id == task_id)
+        )
+        task_obj = task_result.scalars().first()
+        if not task_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Task {task_id} not found"
+            )
+
+        # 2. 确定表名：优先使用传入的 table_name，否则使用 spider_name
+        target_table = table_name or task_obj.spider_name
+        if not target_table:
+            return ApiResponse.success(data={"items": [], "total": 0, "table_name": None})
+
+        # 3~5. 使用爬虫数据专属引擎查询（数据存储在 Spider 数据库中）
+        async with spider_async_engine.connect() as spider_conn:
+            # 3. 检查表是否存在
+            check_table_sql = text(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema = 'public' AND table_name = :name"
+            )
+            result = await spider_conn.execute(check_table_sql, {"name": target_table})
+            if result.scalar_one_or_none() is None:
+                return ApiResponse.success(data={"items": [], "total": 0, "table_name": target_table})
+
+            # 4. 查询总数
+            count_sql = text(f'SELECT COUNT(*) FROM "{target_table}" WHERE "_task_id" = :task_id')
+            count_result = await spider_conn.execute(count_sql, {"task_id": task_id})
+            total = count_result.scalar() or 0
+
+            # 5. 分页查询数据
+            data_sql = text(
+                f'SELECT "_id", "_task_id", "_data", "_created_at" '
+                f'FROM "{target_table}" '
+                f'WHERE "_task_id" = :task_id '
+                f'ORDER BY "_id" DESC '
+                f'OFFSET :skip LIMIT :limit'
+            )
+            data_result = await spider_conn.execute(
+                data_sql,
+                {"task_id": task_id, "skip": skip, "limit": limit}
+            )
+            rows = data_result.fetchall()
+
+        items = [
+            {
+                "id": row[0],
+                "task_id": row[1],
+                "data": row[2],
+                "created_at": str(row[3]) if row[3] else None
+            }
+            for row in rows
+        ]
+
+        return ApiResponse.success(data={
+            "items": items,
+            "total": total,
+            "table_name": target_table,
+            "skip": skip,
+            "limit": limit
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fetch data for task {task_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch task data: {str(e)}"
         )
 
 

@@ -185,7 +185,7 @@ async def admin_get_logs(
     """
     from datetime import datetime as dt
 
-    stmt = select(AuditLog)
+    stmt = select(AuditLog, User.email).outerjoin(User, AuditLog.operator_id == User.id)
 
     if operator_id is not None:
         stmt = stmt.where(AuditLog.operator_id == operator_id)
@@ -206,9 +206,15 @@ async def admin_get_logs(
 
     stmt = stmt.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit)
     result = await session.execute(stmt)
-    logs = result.scalars().all()
+    rows = result.all()
 
-    return ApiResponse.success(data=[AuditLogOut.model_validate(log) for log in logs])
+    data = []
+    for log, email in rows:
+        out = AuditLogOut.model_validate(log)
+        out.operator_email = email or "已删除用户"
+        data.append(out)
+
+    return ApiResponse.success(data=data)
 
 
 @router.post(
@@ -222,7 +228,7 @@ async def admin_query_logs(
     _: User = Depends(require_admin),
     session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse[List[AuditLogOut]]:
-    stmt = select(AuditLog)
+    stmt = select(AuditLog, User.email).outerjoin(User, AuditLog.operator_id == User.id)
 
     if body.operator_id is not None:
         stmt = stmt.where(AuditLog.operator_id == body.operator_id)
@@ -237,9 +243,15 @@ async def admin_query_logs(
 
     stmt = stmt.order_by(AuditLog.created_at.desc()).offset(body.skip).limit(body.limit)
     result = await session.execute(stmt)
-    logs = result.scalars().all()
+    rows = result.all()
 
-    return ApiResponse.success(data=[AuditLogOut.model_validate(log) for log in logs])
+    data = []
+    for log, email in rows:
+        out = AuditLogOut.model_validate(log)
+        out.operator_email = email or "已删除用户"
+        data.append(out)
+
+    return ApiResponse.success(data=data)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -261,7 +273,7 @@ async def admin_export_logs(
     session: AsyncSession = Depends(get_async_session),
 ):
     from datetime import datetime as dt
-    stmt = select(AuditLog).order_by(AuditLog.created_at.desc())
+    stmt = select(AuditLog, User.email).outerjoin(User, AuditLog.operator_id == User.id).order_by(AuditLog.created_at.desc())
 
     if operator_id is not None:
         stmt = stmt.where(AuditLog.operator_id == operator_id)
@@ -280,39 +292,41 @@ async def admin_export_logs(
         except ValueError:
             raise HTTPException(status_code=400, detail="end_time 格式错误")
 
-    result = await session.execute(stmt)
-    logs = result.scalars().all()
+    async with session:
+        result = await session.execute(stmt)
+        rows = result.all()
 
-    def iter_csv():
-        output = io.StringIO()
-        # 处理 Windows Excel 中文乱码（UTF-8 BOM）
-        output.write('\ufeff')
-        writer = csv.writer(output)
-        writer.writerow([
-            "ID", "操作者 ID", "角色", "动作", "资源类型",
-            "资源 ID", "旧值", "新值", "IP 地址", "状态码", "时间"
-        ])
-        yield output.getvalue()
-        output.seek(0)
-        output.truncate(0)
-
-        for log in logs:
+        def iter_csv():
+            output = io.StringIO()
+            # 处理 Windows Excel 中文乱码（UTF-8 BOM）
+            output.write('\ufeff')
+            writer = csv.writer(output)
             writer.writerow([
-                log.id,
-                str(log.operator_id),
-                log.role,
-                log.action,
-                log.resource_type,
-                log.resource_id,
-                log.original_value or "",
-                log.new_value or "",
-                log.ip_address or "",
-                log.status_code,
-                log.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                "ID", "操作者 ID", "操作者邮箱", "角色", "动作", "资源类型",
+                "资源 ID", "旧值", "新值", "IP 地址", "状态码", "时间"
             ])
             yield output.getvalue()
             output.seek(0)
             output.truncate(0)
+
+            for log, email in rows:
+                writer.writerow([
+                    log.id,
+                    str(log.operator_id),
+                    email or "已删除用户",
+                    log.role,
+                    log.action,
+                    log.resource_type,
+                    log.resource_id,
+                    log.original_value or "",
+                    log.new_value or "",
+                    log.ip_address or "",
+                    log.status_code,
+                    log.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                ])
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
 
     from urllib.parse import quote
     filename = f"audit_logs_{dt.now().strftime('%Y%m%d_%H%M%S')}.csv"

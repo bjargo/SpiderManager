@@ -139,7 +139,7 @@
 
 .al-table thead th {
     padding: 12px 14px;
-    text-align: left;
+    text-align: center;
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-secondary);
@@ -162,6 +162,7 @@
     padding: 10px 14px;
     color: var(--text-primary);
     vertical-align: middle;
+    text-align: center;
 }
 
 .al-id {
@@ -185,7 +186,8 @@
     font-size: 0.82rem;
 }
 
-.al-truncate {
+.al-truncate,
+.al-operator-email {
     max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
