@@ -1,17 +1,15 @@
 """
-消息管理路由 — 全异步
+消息管理路由 — 纯接口层
+
+所有业务逻辑已迁移到 services.py，本模块仅负责路由注册和请求响应。
 """
 from typing import List, Optional
-from datetime import datetime
 
-from app.core.timezone import now
-
-from fastapi import APIRouter, Depends, Query, Path, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.messages.models import SystemMessage
 from app.api.messages import schemas
+from app.api.messages import services
 from app.api.users.models import User
 from app.core.dependencies import require_viewer
 from app.db.database import get_async_session
@@ -22,69 +20,67 @@ router = APIRouter()
 @router.post("/", response_model=schemas.SystemMessageOut, summary="发送系统消息")
 async def send_message(
     message_in: schemas.SystemMessageCreate,
-    session: AsyncSession = Depends(get_async_session)
-):
-    if message_in.receiver_id <= 0:
-        raise HTTPException(status_code=400, detail="Invalid receiver ID")
+    session: AsyncSession = Depends(get_async_session),
+) -> schemas.SystemMessageOut:
+    """
+    发送一条系统消息。
 
-    db_msg = SystemMessage(
-        title=message_in.title, content=message_in.content,
-        receiver_id=message_in.receiver_id, sender_id=message_in.sender_id,
-    )
-    session.add(db_msg)
-    await session.commit()
-    await session.refresh(db_msg)
-    return db_msg
+    :param message_in: 消息创建请求体
+    :param session: 注入的数据库会话
+    :return: 创建后的消息对象
+    """
+    return await services.send_message(message_in, session)
 
 
 @router.get("/user/{user_id}", response_model=List[schemas.SystemMessageOut], summary="查询用户的系统消息")
 async def read_user_messages(
     user_id: int = Path(...),
-    skip: int = Query(0), limit: int = Query(100),
+    skip: int = Query(0),
+    limit: int = Query(100),
     is_read: Optional[bool] = Query(None),
     session: AsyncSession = Depends(get_async_session),
-    operator: User = Depends(require_viewer)
+    operator: User = Depends(require_viewer),
 ):
-    stmt = select(SystemMessage).where(SystemMessage.receiver_id == user_id)
-    # Filter out deleted messages unless user is an admin
-    from app.core.enums import UserRole
-    if getattr(operator, "role", None) != UserRole.admin:
-        stmt = stmt.where(SystemMessage.is_deleted == False)
+    """
+    获取指定用户的系统消息列表。
 
-    if is_read is not None:
-        stmt = stmt.where(SystemMessage.is_read == is_read)
-    stmt = stmt.order_by(SystemMessage.created_at.desc()).offset(skip).limit(limit)
-    result = await session.execute(stmt)
-    return result.scalars().all()
+    :param user_id: 目标用户 ID
+    :param skip: 跳过记录数
+    :param limit: 返回记录数上限
+    :param is_read: 已读/未读筛选
+    :param session: 注入的数据库会话
+    :param operator: 注入的当前操作者
+    :return: 消息列表
+    """
+    return await services.get_user_messages(user_id, skip, limit, is_read, operator, session)
 
 
 @router.post("/{message_id}/read", response_model=schemas.SystemMessageOut, summary="阅读系统消息")
 async def read_message(
     message_id: int = Path(...),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
 ):
-    msg = await session.get(SystemMessage, message_id)
-    if not msg or msg.is_deleted:
-        raise HTTPException(status_code=404, detail="Message not found")
+    """
+    标记指定消息为已读。
 
-    msg.is_read = True
-    if not msg.read_at:
-        msg.read_at = now()
-    session.add(msg)
-    await session.commit()
-    await session.refresh(msg)
-    return msg
+    :param message_id: 消息主键 ID
+    :param session: 注入的数据库会话
+    :return: 更新后的消息对象
+    """
+    return await services.read_message(message_id, session)
 
 
 @router.post("/{message_id}/delete", summary="删除系统消息")
 async def delete_message(
     message_id: int = Path(...),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
 ):
-    msg = await session.get(SystemMessage, message_id)
-    if not msg or msg.is_deleted:
-        raise HTTPException(status_code=404, detail="Message not found")
-    msg.is_deleted = True
-    session.add(msg)
-    await session.commit()
+    """
+    软删除指定消息。
+
+    :param message_id: 消息主键 ID
+    :param session: 注入的数据库会话
+    :return: 删除成功消息
+    """
+    await services.delete_message(message_id, session)
     return {"message": "Message deleted successfully"}

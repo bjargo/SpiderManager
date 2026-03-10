@@ -23,6 +23,7 @@ from app.api.admin.router import router as admin_router
 from app.core.redis import redis_manager
 from app.core.scheduler import start_scheduler, shutdown_scheduler
 from config import settings
+from app.core.startup import clean_orphaned_tasks
 from app.core.timezone import now
 from app.core.storage.minio_client import minio_manager
 from app.worker.heartbeat import start_heartbeat_task
@@ -41,29 +42,8 @@ async def lifespan(app: FastAPI):
     if settings.FIRST_SUPERUSER_EMAIL and settings.FIRST_SUPERUSER_PASSWORD:
         await init_superuser(settings.FIRST_SUPERUSER_EMAIL, settings.FIRST_SUPERUSER_PASSWORD)
 
-    # 启动时清理孤儿任务：将上次未正常结束的 running/pending 任务统一标记为 error
-    try:
-        from app.db.database import async_session_maker
-        from app.api.tasks.models import SpiderTask
-        from sqlalchemy import update
-
-        async with async_session_maker() as session:
-            result = await session.execute(
-                update(SpiderTask)
-                .where(SpiderTask.status.in_(["running", "pending"]))
-                .values(
-                    status="error",
-                    error_detail="Orphaned: server restarted before task completed",
-                    finished_at=now(),
-                )
-            )
-            await session.commit()
-            if result.rowcount > 0:
-                logger.warning(
-                    f"Cleaned up {result.rowcount} orphaned task(s) on startup"
-                )
-    except Exception as e:
-        logger.error(f"Failed to clean orphaned tasks: {e}")
+    # 启动时清理孤儿任务
+    await clean_orphaned_tasks()
 
     node_role = getattr(settings, "NODE_ROLE", "master")
     heartbeat_task = None
@@ -146,7 +126,7 @@ app.include_router(dashboard_router, prefix="/api/dashboard", tags=["大盘"])
 app.include_router(admin_router, prefix="/api/admin", tags=["管理员"])
 
 # 独立注册 WebSocket 路由，避免 Router 前缀干扰
-from app.api.tasks.router import websocket_task_logs, websocket_task_data
+from app.api.tasks.websocket import websocket_task_logs, websocket_task_data
 app.add_api_websocket_route("/ws-logs/{task_id}", websocket_task_logs)
 app.add_api_websocket_route("/ws-data/{task_id}", websocket_task_data)
 

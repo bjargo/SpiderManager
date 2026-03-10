@@ -1,26 +1,21 @@
 """
-项目管理路由 (CRUD) — 全异步
+项目管理路由 — 纯接口层
+
+所有业务逻辑已迁移到 services.py，本模块仅负责路由注册和请求响应。
 """
-import uuid
 import logging
 from typing import List
-from datetime import datetime
-
-from app.core.timezone import now
 
 from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
-from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit.service import audit_log
-
-from app.api.projects.models import Project
 from app.api.projects.schemas import ProjectCreate, ProjectUpdate, ProjectOut
-from app.api.spiders.models import Spider
 from app.api.users.models import User
 from app.core.schemas.api_response import ApiResponse
 from app.db.database import get_async_session
-from app.core.dependencies import require_developer, require_viewer, verify_resource_owner
+from app.core.dependencies import require_developer, require_viewer
+from app.api.projects import services
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -31,27 +26,14 @@ async def list_projects(
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_viewer),
 ):
-    stmt = select(Project).where(Project.is_deleted == False).order_by(Project.id.desc())
+    """
+    获取所有未删除的项目列表（含关联爬虫数量）。
 
-    result_projects = await session.execute(stmt)
-    projects = result_projects.scalars().all()
-
-    result: List[ProjectOut] = []
-    for p in projects:
-        count_stmt = select(func.count()).where(Spider.project_id == p.project_id, Spider.is_deleted == False)
-
-        count_result = await session.execute(count_stmt)
-        spider_count = count_result.scalar_one()
-        result.append(ProjectOut(
-            project_id=p.project_id,
-            name=p.name,
-            description=p.description,
-            created_at=p.created_at.isoformat(),
-            updated_at=p.updated_at.isoformat(),
-            spider_count=spider_count,
-            owner_id=p.owner_id,
-            is_deleted=p.is_deleted,
-        ))
+    :param session: 注入的数据库会话
+    :param operator: 注入的当前操作者
+    :return: ApiResponse 包含项目列表
+    """
+    result = await services.list_all(session)
     return ApiResponse.success(data=result)
 
 
@@ -63,27 +45,16 @@ async def create_project(
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
 ):
-    project_id = f"proj-{uuid.uuid4().hex[:8]}"
-    db_project = Project(
-        project_id=project_id,
-        name=body.name,
-        description=body.description,
-        owner_id=operator.id,
-    )
-    session.add(db_project)
-    await session.commit()
-    await session.refresh(db_project)
+    """
+    创建一个新的项目记录。
 
-    out = ProjectOut(
-        project_id=db_project.project_id, name=db_project.name,
-        description=db_project.description,
-        created_at=db_project.created_at.isoformat(),
-        updated_at=db_project.updated_at.isoformat(),
-        spider_count=0,
-        owner_id=db_project.owner_id,
-        is_deleted=db_project.is_deleted,
-    )
-    logger.info(f"Project '{body.name}' created as {project_id}.")
+    :param body: 项目创建请求体
+    :param background_tasks: 后台任务（审计日志使用）
+    :param session: 注入的数据库会话
+    :param operator: 注入的当前操作者
+    :return: ApiResponse 包含创建后的项目信息
+    """
+    out = await services.create_project(body, operator, session)
     return ApiResponse.success(data=out)
 
 
@@ -96,40 +67,17 @@ async def update_project(
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
 ):
-    result = await session.execute(
-        select(Project).where(Project.project_id == project_id, Project.is_deleted == False)
-    )
-    db_project = result.scalars().first()
-    if not db_project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+    """
+    更新指定项目的名称或描述。
 
-    verify_resource_owner(db_project.owner_id, operator, resource_name="项目")
-
-    if body.name is not None:
-        db_project.name = body.name
-    if body.description is not None:
-        db_project.description = body.description
-    db_project.updated_at = now()
-
-    session.add(db_project)
-    await session.commit()
-    await session.refresh(db_project)
-
-    count_result = await session.execute(
-        select(func.count()).where(Spider.project_id == project_id, Spider.is_deleted == False)
-    )
-    spider_count = count_result.scalar_one()
-
-    out = ProjectOut(
-        project_id=db_project.project_id, name=db_project.name,
-        description=db_project.description,
-        created_at=db_project.created_at.isoformat(),
-        updated_at=db_project.updated_at.isoformat(),
-        spider_count=spider_count,
-        owner_id=db_project.owner_id,
-        is_deleted=db_project.is_deleted,
-    )
-    logger.info(f"Project {project_id} updated.")
+    :param project_id: 项目 ID（proj-xxx 格式）
+    :param body: 项目更新请求体
+    :param background_tasks: 后台任务（审计日志使用）
+    :param session: 注入的数据库会话
+    :param operator: 注入的当前操作者
+    :return: ApiResponse 包含更新后的项目信息
+    """
+    out = await services.update_project(project_id, body, operator, session)
     return ApiResponse.success(data=out)
 
 
@@ -141,26 +89,14 @@ async def delete_project(
     session: AsyncSession = Depends(get_async_session),
     operator: User = Depends(require_developer),
 ):
-    result = await session.execute(
-        select(Project).where(Project.project_id == project_id, Project.is_deleted == False)
-    )
-    db_project = result.scalars().first()
-    if not db_project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+    """
+    软删除项目及其关联的所有爬虫。
 
-    verify_resource_owner(db_project.owner_id, operator, resource_name="项目")
-
-    spiders_result = await session.execute(
-        select(Spider).where(Spider.project_id == project_id, Spider.is_deleted == False)
-    )
-    spiders = spiders_result.scalars().all()
-    for spider in spiders:
-        spider.is_deleted = True
-        session.add(spider)
-
-    db_project.is_deleted = True
-    session.add(db_project)
-    await session.commit()
-
-    logger.info(f"Project {project_id} and {len(spiders)} associated spiders deleted.")
-    return ApiResponse.success(message=f"项目 {db_project.name} 及其 {len(spiders)} 个爬虫已删除")
+    :param project_id: 项目 ID（proj-xxx 格式）
+    :param background_tasks: 后台任务（审计日志使用）
+    :param session: 注入的数据库会话
+    :param operator: 注入的当前操作者
+    :return: ApiResponse 成功消息
+    """
+    message = await services.delete_project(project_id, operator, session)
+    return ApiResponse.success(message=message)

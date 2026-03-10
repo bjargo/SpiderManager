@@ -1,27 +1,21 @@
 """
-管理员路由模块
+管理员路由 — 纯接口层
 
-所有接口均要求 admin 角色，通过 require_admin 依赖统一鉴权。
+所有业务逻辑已迁移到 services.py，本模块仅负责路由注册和请求响应。
 
 接口列表：
-  POST /admin/users               — 管理员创建用户（系统生成随机密码）
+  POST /admin/users               — 管理员创建用户
   POST /admin/users/{id}/status   — 禁用/启用用户
   GET  /admin/logs                — 审计日志分页筛选查询
+  POST /admin/logs/query          — 审计日志高级筛选（POST Body）
+  GET  /admin/logs/export         — 审计日志导出 CSV
 """
 import uuid
 import logging
-import secrets
-import string
 from typing import List
 
-import sys
-import csv
-import io
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import StreamingResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi_users import exceptions as fu_exc
 
 from app.api.admin.schemas import (
     AdminCreateUserRequest,
@@ -30,38 +24,16 @@ from app.api.admin.schemas import (
     AdminLogQueryRequest,
     AuditLogOut,
 )
-from app.core.audit.models import AuditLog
 from app.api.users.models import User
-from app.api.users.schemas import UserCreate
 from app.api.users.manager import get_user_manager, UserManager
-from app.core.dependencies import require_admin, get_current_verified_user
+from app.core.dependencies import require_admin
 from app.core.schemas.api_response import ApiResponse
 from app.db.database import get_async_session
+from app.api.admin import services
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# 密码字符集：大小写字母 + 数字 + 特殊字符，确保强度
-_PASSWORD_ALPHABET = string.ascii_letters + string.digits + "!@#$%^&*"
-_PASSWORD_MIN_LEN = 14
-
-
-def _generate_strong_password(length: int = _PASSWORD_MIN_LEN) -> str:
-    """生成指定长度的强随机密码（至少包含大写、小写、数字、特殊字符各一个）。"""
-    while True:
-        pwd = "".join(secrets.choice(_PASSWORD_ALPHABET) for _ in range(length))
-        if (
-            any(c.isupper() for c in pwd)
-            and any(c.islower() for c in pwd)
-            and any(c.isdigit() for c in pwd)
-            and any(c in "!@#$%^&*" for c in pwd)
-        ):
-            return pwd
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# POST /admin/users — 管理员创建用户
-# ─────────────────────────────────────────────────────────────────────────────
 
 @router.post(
     "/users",
@@ -75,45 +47,21 @@ async def admin_create_user(
     operator: User = Depends(require_admin),
     user_manager: UserManager = Depends(get_user_manager),
 ) -> ApiResponse[AdminCreateUserResponse]:
-    initial_password = _generate_strong_password()
+    """
+    管理员创建新用户账号。
 
-    user_create = UserCreate(
-        email=body.email,
-        password=initial_password,
-        role=body.role,
-        is_verified=body.is_verified,
-    )
-
-    try:
-        new_user = await user_manager.create(user_create, safe=False, request=request)
-    except fu_exc.UserAlreadyExists:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"邮箱 {body.email} 已被注册",
-        )
-    except Exception as exc:
-        logger.error("admin_create_user error: %s", exc)
-        raise HTTPException(status_code=500, detail="创建用户失败，请查看服务日志")
-
-    logger.info(
-        "Admin %s created user %s (email=%s role=%s)",
-        operator.id, new_user.id, new_user.email, body.role,
-    )
-
+    :param body: 用户创建请求体
+    :param request: FastAPI 请求对象
+    :param operator: 注入的当前操作者（需 admin 角色）
+    :param user_manager: 注入的用户管理器
+    :return: ApiResponse 包含新用户信息和初始密码
+    """
+    data = await services.admin_create_user(body, operator, user_manager, request)
     return ApiResponse.success(
-        data=AdminCreateUserResponse(
-            id=new_user.id,
-            email=new_user.email,
-            role=new_user.role,
-            initial_password=initial_password,
-        ),
+        data=data,
         message="用户创建成功，请将初始密码安全地告知用户并要求立即修改",
     )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# POST /admin/users/{user_id}/status — 禁用/启用用户
-# ─────────────────────────────────────────────────────────────────────────────
 
 @router.post(
     "/users/{user_id}/status",
@@ -128,46 +76,28 @@ async def admin_set_user_status(
     operator: User = Depends(require_admin),
     session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse:
-    # 禁止管理员对自身操作（防止自锁）
-    if user_id == operator.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="不能对自己的账号执行禁用/启用操作",
-        )
+    """
+    禁用或启用指定用户账号。
 
-    target_user = await session.get(User, user_id)
-    if not target_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
-
-    old_status = target_user.is_active
-    target_user.is_active = body.is_active
-    session.add(target_user)
-    await session.commit()
-
-    action_desc = "启用" if body.is_active else "禁用"
-    logger.info(
-        "Admin %s %s user %s (email=%s): is_active %s -> %s",
-        operator.id, action_desc, user_id, target_user.email, old_status, body.is_active,
-    )
-
+    :param user_id: 目标用户 UUID
+    :param body: 包含 is_active 的请求体
+    :param request: FastAPI 请求对象
+    :param operator: 注入的当前操作者（需 admin 角色）
+    :param session: 注入的数据库会话
+    :return: ApiResponse 包含操作结果
+    """
+    result = await services.set_user_status(user_id, body, operator, session)
     return ApiResponse.success(
-        message=f"用户 {target_user.email} 已{action_desc}",
-        data={"user_id": str(user_id), "is_active": body.is_active},
+        message=f"用户 {result['email']} 已{result['action_desc']}",
+        data={"user_id": result["user_id"], "is_active": result["is_active"]},
     )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /admin/logs — 审计日志筛选查询
-# ─────────────────────────────────────────────────────────────────────────────
 
 @router.get(
     "/logs",
     response_model=ApiResponse[List[AuditLogOut]],
     summary="审计日志查询",
-    description=(
-        "管理员专属接口，支持按操作者、操作动作、资源类型、时间范围筛选审计日志。"
-        "所有参数均为可选，不传则返回最新 N 条。"
-    ),
+    description="管理员专属接口，支持按操作者、操作动作、资源类型、时间范围筛选审计日志。",
 )
 async def admin_get_logs(
     operator_id: uuid.UUID | None = None,
@@ -181,39 +111,22 @@ async def admin_get_logs(
     session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse[List[AuditLogOut]]:
     """
-    GET 版本：通过 Query 参数传递筛选条件（便于前端直接拼 URL）。
+    通过 Query 参数按条件筛选审计日志。
+
+    :param operator_id: 操作者 UUID 筛选
+    :param action: 操作动作筛选
+    :param resource_type: 资源类型筛选
+    :param start_time: 起始时间（ISO 8601）
+    :param end_time: 截止时间（ISO 8601）
+    :param skip: 跳过记录数
+    :param limit: 返回记录数上限
+    :param _: 注入的当前操作者（需 admin 角色）
+    :param session: 注入的数据库会话
+    :return: ApiResponse 包含审计日志列表
     """
-    from datetime import datetime as dt
-
-    stmt = select(AuditLog, User.email).outerjoin(User, AuditLog.operator_id == User.id)
-
-    if operator_id is not None:
-        stmt = stmt.where(AuditLog.operator_id == operator_id)
-    if action:
-        stmt = stmt.where(AuditLog.action == action.upper())
-    if resource_type:
-        stmt = stmt.where(AuditLog.resource_type == resource_type.lower())
-    if start_time:
-        try:
-            stmt = stmt.where(AuditLog.created_at >= dt.fromisoformat(start_time))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="start_time 格式错误，请使用 ISO 8601 格式")
-    if end_time:
-        try:
-            stmt = stmt.where(AuditLog.created_at <= dt.fromisoformat(end_time))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="end_time 格式错误，请使用 ISO 8601 格式")
-
-    stmt = stmt.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit)
-    result = await session.execute(stmt)
-    rows = result.all()
-
-    data = []
-    for log, email in rows:
-        out = AuditLogOut.model_validate(log)
-        out.operator_email = email or "已删除用户"
-        data.append(out)
-
+    data = await services.query_audit_logs(
+        session, operator_id, action, resource_type, start_time, end_time, skip, limit,
+    )
     return ApiResponse.success(data=data)
 
 
@@ -228,35 +141,24 @@ async def admin_query_logs(
     _: User = Depends(require_admin),
     session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse[List[AuditLogOut]]:
-    stmt = select(AuditLog, User.email).outerjoin(User, AuditLog.operator_id == User.id)
+    """
+    通过 JSON Body 按条件筛选审计日志。
 
-    if body.operator_id is not None:
-        stmt = stmt.where(AuditLog.operator_id == body.operator_id)
-    if body.action:
-        stmt = stmt.where(AuditLog.action == body.action.upper())
-    if body.resource_type:
-        stmt = stmt.where(AuditLog.resource_type == body.resource_type.lower())
-    if body.start_time:
-        stmt = stmt.where(AuditLog.created_at >= body.start_time)
-    if body.end_time:
-        stmt = stmt.where(AuditLog.created_at <= body.end_time)
+    :param body: 审计日志查询请求体
+    :param _: 注入的当前操作者（需 admin 角色）
+    :param session: 注入的数据库会话
+    :return: ApiResponse 包含审计日志列表
+    """
+    # 将 body 中的 datetime 字段转为 ISO 字符串以复用公共逻辑
+    start_time_str = body.start_time.isoformat() if body.start_time else None
+    end_time_str = body.end_time.isoformat() if body.end_time else None
 
-    stmt = stmt.order_by(AuditLog.created_at.desc()).offset(body.skip).limit(body.limit)
-    result = await session.execute(stmt)
-    rows = result.all()
-
-    data = []
-    for log, email in rows:
-        out = AuditLogOut.model_validate(log)
-        out.operator_email = email or "已删除用户"
-        data.append(out)
-
+    data = await services.query_audit_logs(
+        session, body.operator_id, body.action, body.resource_type,
+        start_time_str, end_time_str, body.skip, body.limit,
+    )
     return ApiResponse.success(data=data)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /admin/logs/export — 审计日志导出 CSV
-# ─────────────────────────────────────────────────────────────────────────────
 
 @router.get(
     "/logs/export",
@@ -272,65 +174,18 @@ async def admin_export_logs(
     _: User = Depends(require_admin),
     session: AsyncSession = Depends(get_async_session),
 ):
-    from datetime import datetime as dt
-    stmt = select(AuditLog, User.email).outerjoin(User, AuditLog.operator_id == User.id).order_by(AuditLog.created_at.desc())
+    """
+    导出审计日志为 CSV 文件下载。
 
-    if operator_id is not None:
-        stmt = stmt.where(AuditLog.operator_id == operator_id)
-    if action:
-        stmt = stmt.where(AuditLog.action == action.upper())
-    if resource_type:
-        stmt = stmt.where(AuditLog.resource_type == resource_type.lower())
-    if start_time:
-        try:
-            stmt = stmt.where(AuditLog.created_at >= dt.fromisoformat(start_time))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="start_time 格式错误")
-    if end_time:
-        try:
-            stmt = stmt.where(AuditLog.created_at <= dt.fromisoformat(end_time))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="end_time 格式错误")
-
-    async with session:
-        result = await session.execute(stmt)
-        rows = result.all()
-
-        def iter_csv():
-            output = io.StringIO()
-            # 处理 Windows Excel 中文乱码（UTF-8 BOM）
-            output.write('\ufeff')
-            writer = csv.writer(output)
-            writer.writerow([
-                "ID", "操作者 ID", "操作者邮箱", "角色", "动作", "资源类型",
-                "资源 ID", "旧值", "新值", "IP 地址", "状态码", "时间"
-            ])
-            yield output.getvalue()
-            output.seek(0)
-            output.truncate(0)
-
-            for log, email in rows:
-                writer.writerow([
-                    log.id,
-                    str(log.operator_id),
-                    email or "已删除用户",
-                    log.role,
-                    log.action,
-                    log.resource_type,
-                    log.resource_id,
-                    log.original_value or "",
-                    log.new_value or "",
-                    log.ip_address or "",
-                    log.status_code,
-                    log.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                ])
-                yield output.getvalue()
-                output.seek(0)
-                output.truncate(0)
-
-    from urllib.parse import quote
-    filename = f"audit_logs_{dt.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    headers = {
-        "Content-Disposition": f"attachment; filename*=utf-8''{quote(filename)}"
-    }
-    return StreamingResponse(iter_csv(), media_type="text/csv", headers=headers)
+    :param operator_id: 操作者 UUID 筛选
+    :param action: 操作动作筛选
+    :param resource_type: 资源类型筛选
+    :param start_time: 起始时间（ISO 8601）
+    :param end_time: 截止时间（ISO 8601）
+    :param _: 注入的当前操作者（需 admin 角色）
+    :param session: 注入的数据库会话
+    :return: StreamingResponse（CSV 文件流）
+    """
+    return await services.export_audit_logs_csv(
+        session, operator_id, action, resource_type, start_time, end_time,
+    )
