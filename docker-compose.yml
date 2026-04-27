@@ -305,6 +305,28 @@ services:
     networks:
       - spidermanage_net
 
+  # ────────────────────────────────────────────
+  # Frontend — 前端 Web 界面
+  # 职责：
+  #   1. 多阶段构建：Node.js 编译 React + Vite → Nginx 托管静态资源
+  #   2. Nginx 反向代理 /api 和 /ws-* 请求到 Master 服务
+  #   3. SPA 路由 fallback 到 index.html
+  # ────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: spidermanage_frontend
+    restart: always
+    ports:
+      - "5173:80"  # 宿主机 5173 → 容器内 Nginx 80
+    environment:
+      TZ: *timezone
+    depends_on:
+      - master
+    networks:
+      - spidermanage_net
+
 # ==============================================================================
 # 持久化卷声明
 # Docker 管理的命名卷，数据在容器重建后依然保留
