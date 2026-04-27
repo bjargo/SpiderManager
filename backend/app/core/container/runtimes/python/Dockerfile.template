@@ -1,24 +1,42 @@
-FROM python:3.11-slim
+FROM mcr.microsoft.com/playwright/python:v1.42.0-jammy
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends tzdata && \
+# ── 系统依赖安装 ──
+RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends tzdata wget gnupg2 ca-certificates && \
     ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \
-    groupadd -r spider && useradd -r -g spider -d /app -s /sbin/nologin spider && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# ── Google Chrome 安装（undetected_chromedriver 依赖）──
+# 策略：优先从 Google 官方下载 Chrome Stable；
+#       若网络不可达（如国内环境），则将 Playwright 自带的 Chromium
+#       软链到 /usr/bin/google-chrome-stable，让 uc.find_chrome_executable() 正常发现。
+RUN (wget -q -O /tmp/gc.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+     apt-get update && apt-get install -y --no-install-recommends /tmp/gc.deb && \
+     rm -f /tmp/gc.deb && \
+     apt-get clean && rm -rf /var/lib/apt/lists/* && \
+     echo "[INFO] Google Chrome installed successfully") || \
+    (echo "[INFO] Chrome download failed, symlinking Playwright Chromium as fallback" && \
+     CHROME_PATH=$(find /ms-playwright -name chrome -type f 2>/dev/null | head -1) && \
+     if [ -n "$CHROME_PATH" ]; then \
+       ln -sf "$CHROME_PATH" /usr/bin/google-chrome-stable && \
+       ln -sf "$CHROME_PATH" /usr/bin/google-chrome && \
+       echo "[INFO] Symlinked $CHROME_PATH -> /usr/bin/google-chrome-stable"; \
+     else \
+       echo "[WARN] No Chromium found in Playwright image either"; \
+     fi)
+
 COPY . /app/
 RUN find . -maxdepth 2 -name "*.py"
-RUN if [ -f "requirements.txt" ]; then pip install --no-cache-dir -r requirements.txt; fi && \
-    chown -R spider:spider /app
+RUN if [ -f "requirements.txt" ]; then pip install -i https://mirrors.aliyun.com/pypi/simple/ --no-cache-dir -r requirements.txt; fi
 
-# Switch to non-root user
-USER spider
-
-# NOTE: spidermanager_sdk 等会在 worker 启动容器时挂载或由代码自带，这里仅保证基础依赖。
-CMD ["python", "{{ entrypoint }}"]
+# 以 root 运行，undetected_chromedriver 在容器内需配合 --no-sandbox
+CMD {{ entrypoint }}

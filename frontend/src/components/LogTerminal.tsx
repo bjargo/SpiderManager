@@ -89,7 +89,7 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
         setHistoryLoading(false);
     };
 
-    // 非 live 状态时加载历史
+    // 非 live 状态时同时加载日志和数据历史，确保两个 tab 的计数都能正确显示
     useEffect(() => {
         if (!taskId || isLive) {
             setHistoryLogs([]);
@@ -98,12 +98,9 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
             setHistoryPage(0);
             return;
         }
-        if (activeTab === 'logs') {
-            loadLogHistory(taskId);
-        } else {
-            loadDataHistory(taskId, 0);
-        }
-    }, [taskId, isLive, activeTab]);
+        loadLogHistory(taskId);
+        loadDataHistory(taskId, 0);
+    }, [taskId, isLive]);
 
     // 当前显示的日志
     const logs = (isLive && wsStatus !== 'stream_ended') ? wsLogs : historyLogs;

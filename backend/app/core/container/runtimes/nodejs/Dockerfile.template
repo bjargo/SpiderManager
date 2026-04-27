@@ -17,4 +17,4 @@ RUN if [ -f "package.json" ]; then npm install; fi && \
     chown -R spider:spider /app
 
 USER spider
-CMD ["node", "{{ entrypoint }}"]
+CMD {{ entrypoint }}

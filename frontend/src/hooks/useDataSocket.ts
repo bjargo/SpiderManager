@@ -51,22 +51,27 @@ export function useDataSocket(taskId: string | null, options?: UseDataSocketOpti
                 if (!isMounted) return;
                 try {
                     const rawMsg = JSON.parse(event.data);
-                    const newItem: DataItem = {
+                    const rawData = rawMsg.d || rawMsg.data || rawMsg;
+                    const timestamp = rawMsg.ts || new Date().toISOString();
+                    // data_reducer 发布的 d 字段可能是数组（批量数据），需要拆分为独立 DataItem
+                    const rows: any[] = Array.isArray(rawData) ? rawData : [rawData];
+
+                    const newItems: DataItem[] = rows.map(row => ({
                         id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(),
-                        data: rawMsg.d || rawMsg.data || rawMsg,
-                        timestamp: rawMsg.ts || new Date().toISOString(),
-                    };
-                    
+                        data: typeof row === 'object' && row !== null ? row : { value: row },
+                        timestamp,
+                    }));
+
                     setData(prev => {
-                        const updated = [...prev, newItem];
+                        const updated = [...prev, ...newItems];
                         if (updated.length > maxItems) {
                             return updated.slice(updated.length - maxItems);
                         }
                         return updated;
                     });
-                    
-                    setTotalCount(prev => prev + 1);
-                    options?.onMessage?.(newItem);
+
+                    setTotalCount(prev => prev + newItems.length);
+                    newItems.forEach(item => options?.onMessage?.(item));
                 } catch (e) {
                     console.warn('[DataWS] Failed to parse message:', e);
                 }

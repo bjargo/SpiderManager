@@ -129,6 +129,13 @@ class Settings(BaseSettings):
     LOG_FLUSH_SIZE: int = 20          # 每 N 行 flush 一次
     LOG_FLUSH_INTERVAL: float = 2.0   # 最多 M 秒 flush 一次
 
+    # ── 实时日志热缓冲 (WebSocket 迟到补偿) ──
+    # 每条日志在广播 Pub/Sub 的同时写入 Redis List，供迟到的 WebSocket 客户端回放
+    LOG_HOTBUF_PREFIX: str = "log:hotbuf:"  # Redis List Key 前缀
+    LOG_HOTBUF_MAX: int = 200               # 每个任务最多保留最近 N 条
+    LOG_HOTBUF_TTL: int = 7 * 24 * 3600    # 热缓冲 Key 过期时间（秒），与任务状态 TTL 一致
+
+
     # ── Data Reducer 批量入库 ──
     REDUCER_BATCH_SIZE: int = 100         # 累积 N 条数据触发一次批量写入
     REDUCER_FLUSH_INTERVAL: float = 1.0   # 最多 M 秒强制 flush 一次

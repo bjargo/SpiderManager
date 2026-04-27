@@ -75,6 +75,33 @@ async def _flush_logs(task_id: str, log_buffer: List[str]) -> None:
         logger.error("Failed to flush %d log lines for task %s: %s", len(log_buffer), task_id, e)
 
 
+async def _emit_log(task_id: str, channel: str, message: str) -> None:
+    """
+    统一日志发送方法，同时完成三件事：
+    1. Redis Pub/Sub 实时广播（供已连接的 WebSocket 客户端）
+    2. Redis List 热缓冲（供迟到的 WebSocket 客户端回放，消除竞争时间差）
+    3. 立即落盘 PostgreSQL（保证历史查询可见）
+
+    :param task_id: 任务 UUID
+    :param channel: Redis Pub/Sub 频道名
+    :param message: 日志内容
+    """
+    hotbuf_key = f"{settings.LOG_HOTBUF_PREFIX}{task_id}"
+    try:
+        if redis_manager.client:
+            pipe = redis_manager.client.pipeline()
+            pipe.publish(channel, message)
+            pipe.rpush(hotbuf_key, message)
+            pipe.ltrim(hotbuf_key, -settings.LOG_HOTBUF_MAX, -1)
+            pipe.expire(hotbuf_key, settings.LOG_HOTBUF_TTL)
+            await pipe.execute()
+    except Exception as e:
+        logger.error("_emit_log redis error for task %s: %s", task_id, e)
+
+    # 立即落盘，确保迟到用户查历史日志时可见
+    await _flush_logs(task_id, [message])
+
+
 def _stream_reader(
     stream,
     queue: "asyncio.Queue[str | None]",
@@ -120,7 +147,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
         if redis_manager.client:
             running_status = {"task_id": task_id, "status": "running", "node_id": NODE_ID, "start_time": time.time()}
             await redis_manager.client.set(status_key, json.dumps(running_status), ex=7 * 24 * 3600)
-            await redis_manager.client.publish(channel, f"[SYSTEM: Preparing container build for task {task_id}]")
+        await _emit_log(task_id, channel, f"[SYSTEM: Preparing container build for task {task_id}]")
 
         # 2. 预编译镜像流程 (Remote Fingerprint -> Cache Check -> Build)
         try:
@@ -141,19 +168,16 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                     script_hash = hashlib.sha256(script_path.encode()).hexdigest()[:8]
                     predict_tag = f"spider-{project_id}-{language.replace(':', '-')}:{version_hash[:12]}-{script_hash}"
 
-                    if redis_manager.client:
-                        await redis_manager.client.publish(channel, f"[SYSTEM: Remote fingerprint detected: {version_hash[:12]}]")
+                    await _emit_log(task_id, channel, f"[SYSTEM: Remote fingerprint detected: {version_hash[:12]}]")
 
                     # 检查镜像是否存在 (Cache Hit)
                     if await asyncio.to_thread(image_manager.check_image_exists, predict_tag):
                         cached_image_tag = predict_tag
-                        if redis_manager.client:
-                            await redis_manager.client.publish(channel, f"[SYSTEM: Zero-Download Cache Hit! Image {cached_image_tag} found.]")
+                        await _emit_log(task_id, channel, f"[SYSTEM: Zero-Download Cache Hit! Image {cached_image_tag} found.]")
                         logger.info("Zero-Download Cache Hit for task %s: image %s found.", task_id, cached_image_tag)
             except Exception as probe_err:
                 logger.warning("Remote fingerprint probe failed for task %s: %s. Falling back to download mode.", task_id, probe_err)
-                if redis_manager.client:
-                    await redis_manager.client.publish(channel, f"[SYSTEM: Remote probe failed: {probe_err}. Falling back...]")
+                await _emit_log(task_id, channel, f"[SYSTEM: Remote probe failed: {probe_err}. Falling back...]")
 
             # ── 2b. 执行构建 (仅在 Cache Miss 或 Probe 失败时) ──
             if not cached_image_tag:
@@ -168,9 +192,8 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                 script_hash = hashlib.sha256(script_path.encode()).hexdigest()[:8]
                 image_tag = f"spider-{project_id}-{language.replace(':', '-')}:{version_hash[:12]}-{script_hash}"
 
-                if redis_manager.client:
-                    await redis_manager.client.publish(channel, f"[SYSTEM: Source Hash: {version_hash[:12]}, Image Tag: {image_tag}]")
-                    await redis_manager.client.publish(channel, f"[SYSTEM: Building image...]")
+                await _emit_log(task_id, channel, f"[SYSTEM: Source Hash: {version_hash[:12]}, Image Tag: {image_tag}]")
+                await _emit_log(task_id, channel, "[SYSTEM: Building image...]")
 
                 build_args = task_data.get("build_args", {})
 
@@ -188,22 +211,18 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                 # 直接使用缓存项
                 task_data["image_tag"] = cached_image_tag
 
-            if redis_manager.client:
-                await redis_manager.client.publish(channel, f"[SYSTEM: Image {task_data.get('image_tag')} ready. Launching container...]")
+            await _emit_log(task_id, channel, f"[SYSTEM: Image {task_data.get('image_tag')} ready. Launching container...]")
 
         except Exception as build_err:
             error_msg = f"Build Failed: {build_err}"
             logger.error("Failed to prepare image for task %s: %s", task_id, error_msg)
-            if redis_manager.client:
-                await redis_manager.client.publish(channel, f"[SYSTEM: {error_msg}]")
-            await _flush_logs(task_id, [f"[SYSTEM: {error_msg}]"])
+            await _emit_log(task_id, channel, f"[SYSTEM: {error_msg}]")
             raise RuntimeError(error_msg)
 
         # 3. 启动容器
         container = await asyncio.to_thread(docker_mgr.run_spider_container, task_data)
 
-        if redis_manager.client:
-            await redis_manager.client.publish(channel, f"[SYSTEM: Container {container.short_id} started, using image {task_data.get('image_tag')}]")
+        await _emit_log(task_id, channel, f"[SYSTEM: Container {container.short_id} started, using image {task_data.get('image_tag')}]")
 
         # 4. 流式读取容器日志
         log_stream = await asyncio.to_thread(
@@ -255,7 +274,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                     is_killed = await redis_manager.client.exists(kill_key)
                     if is_killed:
                         logger.warning("Task %s received kill signal, stopping container.", task_id)
-                        await redis_manager.client.publish(channel, "[SYSTEM: Task killed by user]")
+                        await _emit_log(task_id, channel, "[SYSTEM: Task killed by user]")
                         await asyncio.to_thread(docker_mgr.stop_container, container_name, 5)
                         await asyncio.to_thread(docker_mgr.remove_container, container_name, True)
                         await redis_manager.client.delete(kill_key)
@@ -281,15 +300,11 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
             if return_code == 0:
                 final_status = "success"
                 logger.info("Task %s container finished successfully.", task_id)
-                if redis_manager.client:
-                    await redis_manager.client.publish(channel, "[SYSTEM: Task Finished Successfully]")
-                await _flush_logs(task_id, ["[SYSTEM: Task Finished Successfully]"])
+                await _emit_log(task_id, channel, "[SYSTEM: Task Finished Successfully]")
             else:
                 final_status = "failed"
                 logger.error("Task %s container exited with code %s.", task_id, return_code)
-                if redis_manager.client:
-                    await redis_manager.client.publish(channel, f"[SYSTEM: Task Failed with code {return_code}]")
-                await _flush_logs(task_id, [f"[SYSTEM: Task Failed with code {return_code}]"])
+                await _emit_log(task_id, channel, f"[SYSTEM: Task Failed with code {return_code}]")
 
         # Flush 剩余日志
         if log_buffer:
@@ -320,10 +335,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
         if redis_manager.client:
             error_status = {"task_id": task_id, "status": "error", "node_id": NODE_ID, "error_detail": str(e)}
             await redis_manager.client.set(status_key, json.dumps(error_status), ex=7 * 24 * 3600)
-            await redis_manager.client.publish(channel, f"[SYSTEM: Task failed with unexpected error: {e}]")
-
-        # 确保关键错误也被记录到 TaskLog 表中
-        await _flush_logs(task_id, [f"[SYSTEM: Unexpected error: {e}]"])
+        await _emit_log(task_id, channel, f"[SYSTEM: Task failed with unexpected error: {e}]")
         await _update_task_status(task_id, "error", error_detail=str(e), finished_at=timezone.now())
 
     finally:
@@ -331,6 +343,13 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
         await asyncio.to_thread(docker_mgr.remove_container, container_name, force=True)
         # 异步关闭 Docker 客户端
         await asyncio.to_thread(docker_mgr.close)
+
+        # 清理 Redis 热缓冲 List（任务结束后不再需要）
+        if redis_manager.client:
+            try:
+                await redis_manager.client.delete(f"{settings.LOG_HOTBUF_PREFIX}{task_id}")
+            except Exception:
+                pass
 
         # 显式清理为了构建镜像临时下载的源码目录 (同步 IO 放入线程)
         if project_dir and os.path.exists(project_dir):
@@ -378,7 +397,7 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
         if redis_manager.client:
             running_status = {"task_id": task_id, "status": "running", "node_id": NODE_ID, "start_time": time.time()}
             await redis_manager.client.set(status_key, json.dumps(running_status), ex=7 * 24 * 3600)
-            await redis_manager.client.publish(channel, f"[SYSTEM: Preparing environment for project {project_id}]")
+        await _emit_log(task_id, channel, f"[SYSTEM: Preparing environment for project {project_id}]")
 
         logger.info("Task %s loading project: %s", task_id, project_id)
 
@@ -387,8 +406,7 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
             project_dir = await load_project(task_id, source_type, source_url)
         except Exception as e:
             logger.error("Failed to load project %s for task %s: %s", project_id, task_id, e)
-            if redis_manager.client:
-                await redis_manager.client.publish(channel, f"[SYSTEM: Failed to load project code: {e}]")
+            await _emit_log(task_id, channel, f"[SYSTEM: Failed to load project code: {e}]")
             raise
 
         # 2.3 自动打平目录结构 (针对子进程模式)
@@ -424,8 +442,7 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
                 f"Available files: {os.listdir(project_dir) if os.path.isdir(project_dir) else 'dir not found'}"
             )
             logger.error("Task %s: %s", task_id, error_msg)
-            if redis_manager.client:
-                await redis_manager.client.publish(channel, f"[SYSTEM: {error_msg}]")
+            await _emit_log(task_id, channel, f"[SYSTEM: {error_msg}]")
             raise FileNotFoundError(error_msg)
 
         logger.info("Task %s executing script: %s", task_id, script_path)
@@ -499,14 +516,20 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
                     streams_done += 1
                     continue
 
-                # 推送到 Redis Pub/Sub
+                # 推送到 Redis Pub/Sub + 热缓冲，业务日志仍走批量 flush 以提高性能
+                hotbuf_key = f"{settings.LOG_HOTBUF_PREFIX}{task_id}"
                 if redis_manager.client:
                     try:
-                        await redis_manager.client.publish(channel, text)
+                        pipe = redis_manager.client.pipeline()
+                        pipe.publish(channel, text)
+                        pipe.rpush(hotbuf_key, text)
+                        pipe.ltrim(hotbuf_key, -settings.LOG_HOTBUF_MAX, -1)
+                        pipe.expire(hotbuf_key, settings.LOG_HOTBUF_TTL)
+                        await pipe.execute()
                     except Exception as pub_err:
-                        logger.error("Failed to publish log: %s", pub_err)
+                        logger.error("Failed to publish/hotbuf log: %s", pub_err)
 
-                # 缓冲日志
+                # 缓冲日志，批量写入 DB
                 log_buffer.append(text)
 
                 current_time = time.time()
@@ -524,20 +547,15 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
                 if return_code == 0:
                     logger.info("Task %s finished successfully.", task_id)
                     final_status = "success"
-                    if redis_manager.client:
-                        await redis_manager.client.publish(channel, "[SYSTEM: Task Finished Successfully]")
-                    await _flush_logs(task_id, ["[SYSTEM: Task Finished Successfully]"])
+                    await _emit_log(task_id, channel, "[SYSTEM: Task Finished Successfully]")
                 else:
                     logger.error("Task %s failed with code %s.", task_id, return_code)
                     final_status = "failed"
-                    if redis_manager.client:
-                        await redis_manager.client.publish(channel, f"[SYSTEM: Task Failed with code {return_code}]")
-                    await _flush_logs(task_id, [f"[SYSTEM: Task Failed with code {return_code}]"])
+                    await _emit_log(task_id, channel, f"[SYSTEM: Task Failed with code {return_code}]")
 
         except asyncio.TimeoutError:
             logger.warning("Task %s timed out after %s seconds. Killing process...", task_id, timeout)
-            if redis_manager.client:
-                await redis_manager.client.publish(channel, f"[SYSTEM: Task Timed Out after {timeout} seconds]")
+            await _emit_log(task_id, channel, f"[SYSTEM: Task Timed Out after {timeout} seconds]")
             process.terminate()
             try:
                 process.wait(timeout=5)
@@ -585,11 +603,17 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
                 "error_detail": str(e),
             }
             await redis_manager.client.set(status_key, json.dumps(error_status), ex=7 * 24 * 3600)
-            await redis_manager.client.publish(channel, f"[SYSTEM: Task failed with unexpected error: {e}]")
-
+        await _emit_log(task_id, channel, f"[SYSTEM: Task failed with unexpected error: {e}]")
         await _update_task_status(task_id, "error", error_detail=str(e), finished_at=timezone.now())
 
     finally:
+        # 清理 Redis 热缓冲 List
+        if redis_manager.client:
+            try:
+                await redis_manager.client.delete(f"{_LOG_HOTBUF_PREFIX}{task_id}")
+            except Exception:
+                pass
+
         # 4. 彻底清理临时代码目录，防止磁盘爆满
         if project_dir and os.path.exists(project_dir):
             try:

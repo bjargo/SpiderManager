@@ -25,6 +25,10 @@ export default defineConfig({
       '/ws-logs': {
         target: 'ws://127.0.0.1:8000',
         ws: true,
+      },
+      '/ws-data': {
+        target: 'ws://127.0.0.1:8000',
+        ws: true,
       }
     }
   }
