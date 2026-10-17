@@ -21,7 +21,7 @@ from app.api.users.router import router as users_router
 from app.api.dashboard.router import router as dashboard_router
 from app.api.admin.router import router as admin_router
 from app.core.redis import redis_manager
-from app.core.scheduler import start_scheduler, shutdown_scheduler
+from app.core.scheduler import start_leader_election, stop_leader_election
 from config import settings
 from app.core.startup import clean_orphaned_tasks
 from app.core.timezone import now
@@ -47,13 +47,16 @@ async def lifespan(app: FastAPI):
 
     node_role = getattr(settings, "NODE_ROLE", "master")
     heartbeat_task = None
+    leader_task = None
     task_listener_task = None
     data_reducer_task = None
 
     if node_role != "worker":
-        start_scheduler()
         minio_manager.init_client()
         heartbeat_task = await start_heartbeat_task()
+        # 主节点通过 Redis 分布式锁选举唯一 Leader，仅 Leader 启动 APScheduler，
+        # 避免集群中多 Master 重复触发定时任务；Leader 异常时备用节点自动接管。
+        leader_task = await start_leader_election()
 
     # master 和 worker 都可以消费任务队列
     from app.worker.executor import start_task_listener
@@ -72,7 +75,7 @@ async def lifespan(app: FastAPI):
     if node_role != "worker":
         if heartbeat_task:
             heartbeat_task.cancel()
-        shutdown_scheduler()
+        await stop_leader_election(leader_task)
     await redis_manager.close_pool()
 
 app = FastAPI(title="SpiderManage API", lifespan=lifespan, redirect_slashes=False)

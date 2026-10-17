@@ -21,6 +21,7 @@ from app.api.tasks.schemas import TaskRequest, TaskListResponse, DataIngestReque
 from app.api.users.models import User
 from app.core.dependencies import verify_resource_owner
 from app.core.timezone import now
+from app.core.sql import quote_identifier
 from app.db.database import async_session_maker, spider_async_engine
 from config import settings
 
@@ -452,14 +453,17 @@ async def _query_spider_data(
             return [], 0
 
         # 查询总数
-        count_sql = text(f'SELECT COUNT(*) FROM "{target_table}" WHERE "_task_id" = :task_id')
+        count_sql = text(
+            f'SELECT COUNT(*) FROM {quote_identifier(target_table)} '
+            'WHERE "_task_id" = :task_id'
+        )
         count_result = await spider_conn.execute(count_sql, {"task_id": task_id})
         total = count_result.scalar() or 0
 
         # 分页查询数据
         data_sql = text(
             f'SELECT "_id", "_task_id", "_data", "_created_at" '
-            f'FROM "{target_table}" '
+            f'FROM {quote_identifier(target_table)} '
             f'WHERE "_task_id" = :task_id '
             f'ORDER BY "_id" DESC '
             f'OFFSET :skip LIMIT :limit'
@@ -502,16 +506,20 @@ async def ingest_data(
     timestamp = now().isoformat()
 
     try:
-        message = json.dumps(
-            {
-                "t": body.table_name,
-                "d": body.data,
-                "task_id": task_id,
-                "ts": timestamp,
-            },
-            ensure_ascii=False,
-        )
-        await redis.lpush(settings.INGEST_QUEUE_KEY, message)
+        chunk_size = max(1, settings.REDUCER_BATCH_SIZE)
+        messages = [
+            json.dumps(
+                {
+                    "t": body.table_name,
+                    "d": body.data[offset:offset + chunk_size],
+                    "task_id": task_id,
+                    "ts": timestamp,
+                },
+                ensure_ascii=False,
+            )
+            for offset in range(0, len(body.data), chunk_size)
+        ]
+        await redis.lpush(settings.INGEST_QUEUE_KEY, *messages)
     except RedisError as e:
         logger.error("Redis error during data ingestion for task %s: %s", task_id, e)
         raise HTTPException(

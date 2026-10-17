@@ -151,6 +151,12 @@ x-common-env:
   REDUCER_BATCH_SIZE: 100 # 累积 N 条数据触发一次批量写入
   REDUCER_FLUSH_INTERVAL: 1.0 # 最多 M 秒强制 flush 一次
 
+  # ── Data Reducer 内存背压保护 ──
+  # 内存待入库行数触及高水位时暂停消费 Redis 队列并退避重试落库，防止 OOM
+  REDUCER_MAX_PENDING_ROWS: 20000 # 全局待入库行数高水位（超过则暂停拉取）
+  REDUCER_MAX_TABLE_ROWS: 10000 # 单表待入库行数高水位（超过则强制 flush 该表）
+  REDUCER_BACKPRESSURE_SLEEP: 1.0 # 触发背压后的退避休眠（秒）
+
   # ── Docker 容器资源限制 (DooD) ──
   # 以下参数控制 Worker 通过 DockerManager 动态创建的「爬虫容器」的资源配额。
   # 这些值会通过 pydantic-settings 自动注入到 config.py 的同名 Settings 字段中，
@@ -211,7 +217,7 @@ services:
     environment:
       TZ: *timezone
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data # Redis 持久化（RDB/AOF）
     networks:
@@ -224,12 +230,12 @@ services:
   # 管理控制台：http://localhost:9001（用户名/密码见 minio-credentials）
   # ────────────────────────────────────────────
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2022-10-29T06-21-33Z
     container_name: spidermanage_minio
     restart: always
     ports:
-      - "9000:9000" # S3 API 端口
-      - "9001:9001" # Web 管理控制台端口
+      - "9010:9000" # S3 API 端口
+      - "9011:9001" # Web 管理控制台端口
     environment:
       <<: *minio-credentials
       TZ: *timezone
@@ -254,7 +260,7 @@ services:
     container_name: spidermanage_master
     restart: always
     ports:
-      - "8000:8000" # FastAPI 服务端口
+      - "8001:8000" # 将外部冲突的 8000 改为 8001
     volumes:
       # 挂载宿主机 Docker Socket，实现 DooD（Docker-outside-of-Docker）
       # 使 Master/Worker 容器内的 DockerManager 能直接调用宿主机 Docker 守护进程
@@ -319,7 +325,7 @@ services:
     container_name: spidermanage_frontend
     restart: always
     ports:
-      - "5173:80"  # 宿主机 5173 → 容器内 Nginx 80
+      - "4200:80" # 宿主机 4200 → 容器内 Nginx 80
     environment:
       TZ: *timezone
     depends_on:

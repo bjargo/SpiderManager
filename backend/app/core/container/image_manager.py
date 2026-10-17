@@ -1,11 +1,66 @@
+import io
 import os
+import json
 import docker
 import logging
-from docker.errors import BuildError, DockerException
+import tarfile
+from docker.constants import IS_WINDOWS_PLATFORM
+from docker.errors import APIError, BuildError, DockerException, ImageNotFound
+from docker.utils.build import exclude_paths
+from requests.exceptions import RequestException
 from app.core.container.runners import RunnerFactory
 
 
 logger = logging.getLogger(__name__)
+
+
+class ImageBuildError(RuntimeError):
+    """
+    镜像构建失败异常。
+
+    携带 Docker 守护进程返回的完整构建日志（如 pip 安装报错），
+    供上层 Worker 将该日志持久化到任务日志中，方便排查代码依赖问题。
+    """
+
+    def __init__(self, image_tag: str, build_log: str) -> None:
+        self.image_tag = image_tag
+        self.build_log = build_log
+        super().__init__(f"Failed to build Docker image {image_tag}")
+
+
+class BuildKitUnavailable(RuntimeError):
+    """
+    内部信号：BuildKit 构建失败或不可用，需要回退到经典 builder。
+
+    BuildKit 的错误输出（尤其是 RUN 阶段失败）大多以 protobuf trace 形式返回，
+    可读性差；回退到经典 builder 后可以拿到结构化的构建日志并持久化。
+    """
+
+    def __init__(self, message: str, build_log: str = "") -> None:
+        self.build_log = build_log
+        super().__init__(message)
+
+
+def _extract_build_log(build_log: list | None) -> str:
+    """从 docker.errors.BuildError.build_log 中提取可读的纯文本构建日志。"""
+    if not build_log:
+        return ""
+    log_msgs = ""
+    for msg in build_log:
+        if isinstance(msg, dict):
+            if "stream" in msg and isinstance(msg["stream"], str):
+                log_msgs += msg["stream"]
+            elif "error" in msg and isinstance(msg["error"], str):
+                log_msgs += msg["error"] + "\n"
+    return log_msgs.strip()
+
+
+def _redact_build_arg_values(message: str, build_args: dict[str, str]) -> str:
+    for value in build_args.values():
+        if value:
+            message = message.replace(value, "[REDACTED]")
+    return message
+
 
 class ImageManager:
     """
@@ -15,8 +70,8 @@ class ImageManager:
     3. 调用 Docker Engine 进行构建。
     """
 
-    def __init__(self):
-        self._docker_client = None
+    def __init__(self) -> None:
+        self._docker_client: docker.DockerClient | None = None
 
     def _flatten_directory(self, local_path: str) -> str | None:
         """
@@ -25,6 +80,8 @@ class ImageManager:
         返回被打平的目录名。
         """
         import shutil
+        if not os.path.exists(local_path) or not os.path.isdir(local_path):
+            return None
         all_entries = [e for e in os.listdir(local_path) if not e.startswith('.')]
         if len(all_entries) == 1:
             flattened_name = all_entries[0]
@@ -45,7 +102,7 @@ class ImageManager:
         return None
 
     @property
-    def docker_client(self):
+    def docker_client(self) -> docker.DockerClient:
         if self._docker_client is None:
             try:
                 self._docker_client = docker.from_env()
@@ -60,14 +117,21 @@ class ImageManager:
             self.docker_client.images.get(image_tag)
             logger.info(f"Image {image_tag} already exists. Skipping build.")
             return True
-        except docker.errors.ImageNotFound:
+        except ImageNotFound:
             logger.info(f"Image {image_tag} not found. Needs build.")
             return False
         except Exception as e:
             logger.error(f"Error checking image {image_tag}: {e}")
             return False
 
-    def build_image(self, local_path: str, language: str, image_tag: str, entrypoint: str, build_args: dict = None) -> str:
+    def build_image(
+        self,
+        local_path: str,
+        language: str,
+        image_tag: str,
+        entrypoint: str,
+        build_args: dict[str, str] | None = None,
+    ) -> str:
         """
         核心构建逻辑：基于插件架构动态渲染 Dockerfile、.dockerignore 和启动 Docker build 进程。
         Returns:
@@ -103,19 +167,176 @@ class ImageManager:
                 logger.info(f"Adjusted entrypoint from '{entrypoint}' to '{new_entrypoint}' due to flattening.")
                 entrypoint = new_entrypoint
 
-        # 将 entrypoint 以及所有的 build_args 打包作为渲染上下文
-        context_vars = {"entrypoint": entrypoint}
-        context_vars.update(build_args)
+        # Only non-secret Dockerfile options belong in the rendered build context.
+        # Build arguments are passed separately to the Docker API below.
+        context_vars = {"entrypoint": entrypoint, "buildkit_enabled": True}
         runner.prepare_context(local_path, context_vars)
 
         # 3. 调用 Docker Engine 构建镜像
-        logger.info(f"Starting Docker build for image {image_tag}")
         dockerfile_path = os.path.join(local_path, "Dockerfile")
         if os.path.exists(dockerfile_path):
-            with open(dockerfile_path, "r", encoding="utf-8") as f:
-                logger.debug(f"Generated Dockerfile for {image_tag}:\n{f.read()}")
+            logger.debug("Generated Dockerfile for %s at %s", image_tag, dockerfile_path)
         else:
             logger.warning(f"Dockerfile not found in {local_path} for {image_tag}")
+
+        # 3.1 优先使用 BuildKit，以便模板中的 RUN --mount=type=cache 生效
+        logger.info(f"Starting BuildKit build for image {image_tag}")
+        try:
+            self._build_with_buildkit(local_path, image_tag, build_args)
+            logger.info(f"Successfully built image: {image_tag}")
+            return image_tag
+        except BuildKitUnavailable as e:
+            logger.warning(
+                f"BuildKit build failed for {image_tag}: {e}. "
+                "Falling back to legacy builder without cache mounts."
+            )
+
+        # 3.2 回退经典 builder：重新渲染不包含 cache mount 的 Dockerfile
+        context_vars["buildkit_enabled"] = False
+        runner.prepare_context(local_path, context_vars)
+
+        logger.info(f"Starting legacy Docker build for image {image_tag}")
+        self._build_with_legacy(local_path, image_tag, build_args)
+        logger.info(f"Successfully built image: {image_tag}")
+        return image_tag
+
+    def _create_build_context(self, local_path: str) -> io.BytesIO:
+        """
+        生成 Docker 构建上下文 tar。
+
+        不复用 docker-py 的 `utils.build.tar`：Python 3.8+ 的 tarfile 默认使用 PAX
+        格式，会为带亚秒级 mtime 的文件写入 `././@PaxHeader` 扩展头；Docker BuildKit
+        会把这个扩展头误当作 Dockerfile 内容，报
+        `unknown instruction: ././@PaxHeader...`。这里强制 GNU 格式规避该问题，
+        同时复用 docker-py 的 `.dockerignore` 匹配逻辑，保持过滤语义一致。
+        """
+        root = os.path.abspath(local_path)
+        patterns = [".dockerignore"]
+        dockerignore_path = os.path.join(root, ".dockerignore")
+        if os.path.exists(dockerignore_path):
+            with open(dockerignore_path, "r", encoding="utf-8") as f:
+                patterns.extend(filter(
+                    lambda line: line != "" and line[0] != "#",
+                    [line.strip() for line in f.read().splitlines()],
+                ))
+
+        # exclude_paths 会强制包含 Dockerfile
+        files = sorted(exclude_paths(root, patterns))
+
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w", format=tarfile.GNU_FORMAT) as tar:
+            for path in files:
+                full_path = os.path.join(root, path)
+                arcname = path.replace(os.path.sep, "/")
+                info = tar.gettarinfo(full_path, arcname=arcname)
+                if info is None:
+                    # 遇到 socket 等无法归档的文件时安全跳过
+                    continue
+
+                # 兼容 Python http://bugs.python.org/issue32713 的时间戳溢出问题
+                if info.mtime < 0 or info.mtime > 8**11 - 1:
+                    info.mtime = int(info.mtime)
+
+                if IS_WINDOWS_PLATFORM:
+                    # Windows 不保留可执行位，默认让文件与目录可执行
+                    info.mode = info.mode & 0o755 | 0o111
+
+                if info.isfile():
+                    try:
+                        with open(full_path, "rb") as f:
+                            tar.addfile(info, f)
+                    except OSError as oe:
+                        raise RuntimeError(
+                            f"Can not read file in build context: {full_path}"
+                        ) from oe
+                else:
+                    # 目录、FIFO、符号链接等无需读取内容
+                    tar.addfile(info, None)
+
+        buffer.seek(0)
+        return buffer
+
+    def _build_with_buildkit(
+        self, local_path: str, image_tag: str, build_args: dict[str, str]
+    ) -> None:
+        """
+        通过低层 API (`POST /build?version=2`) 触发 BuildKit 构建。
+
+        docker-py 7.x 的 `images.build` 无法开启 BuildKit，因此这里直接复用其内部
+        的上下文打包与流解析逻辑，仅在请求参数中补充 `version=2`。
+        """
+        api = self.docker_client.api
+        context = self._create_build_context(local_path)
+
+        params = {
+            "t": image_tag,
+            "version": "2",  # 启用 BuildKit，RUN --mount=type=cache 依赖该参数
+            "rm": "1",
+            "forcerm": "1",
+            "dockerfile": "Dockerfile",
+        }
+        if build_args:
+            params["buildargs"] = json.dumps(build_args)
+
+        try:
+            response = api._post(
+                api._url("/build"),
+                data=context,
+                params=params,
+                headers={"Content-Type": "application/tar"},
+                stream=True,
+                # 构建可能持续数十秒到数分钟（拉依赖），且期间可能长时间无输出；
+                # 关闭读超时，避免 socket Read timed out 导致误判为构建失败。
+                timeout=None,
+            )
+        except (APIError, DockerException, RequestException) as e:
+            raise BuildKitUnavailable(
+                _redact_build_arg_values(f"BuildKit request failed: {e}", build_args)
+            ) from e
+        finally:
+            context.close()
+
+        log_lines: list[str] = []
+        error_message = ""
+        try:
+            # 真实响应非 2xx 时直接回退；用 response.ok 避免测试中的 mock 比较运算报错
+            if not response.ok:
+                raise BuildKitUnavailable(
+                    f"BuildKit returned HTTP {getattr(response, 'status_code', 'unknown')}"
+                )
+
+            for chunk in api._stream_helper(response, decode=True):
+                if not isinstance(chunk, dict):
+                    continue
+                stream_text = chunk.get("stream")
+                if isinstance(stream_text, str):
+                    log_lines.append(_redact_build_arg_values(stream_text, build_args))
+                if chunk.get("error"):
+                    error_message = _redact_build_arg_values(str(chunk["error"]), build_args)
+                error_detail = chunk.get("errorDetail")
+                if isinstance(error_detail, dict) and error_detail.get("message"):
+                    error_message = _redact_build_arg_values(error_detail["message"], build_args)
+        except BuildKitUnavailable:
+            raise
+        except Exception as e:
+            raise BuildKitUnavailable(
+                _redact_build_arg_values(f"Failed to read BuildKit output: {e}", build_args),
+                "".join(log_lines).strip(),
+            ) from e
+        finally:
+            response.close()
+
+        if error_message:
+            raise BuildKitUnavailable(error_message, "".join(log_lines).strip())
+
+        for line in log_lines:
+            if line.strip():
+                logger.debug(_redact_build_arg_values(line.strip(), build_args))
+
+    def _build_with_legacy(
+        self, local_path: str, image_tag: str, build_args: dict[str, str]
+    ) -> None:
+        """使用 docker-py 的经典 builder 构建（不支持 cache mount，但日志可读）。"""
         try:
             image, build_logs = self.docker_client.images.build(
                 path=local_path,
@@ -127,27 +348,22 @@ class ImageManager:
 
             # 记录构建日志，方便调试
             for chunk in build_logs:
-                if 'stream' in chunk:
-                    logger.debug(chunk['stream'].strip())
-
-            logger.info(f"Successfully built image: {image_tag}")
-            return image_tag
+                if isinstance(chunk, dict) and "stream" in chunk:
+                    stream_text = chunk["stream"]
+                    if isinstance(stream_text, str):
+                        logger.debug(_redact_build_arg_values(stream_text.strip(), build_args))
 
         except BuildError as e:
-            # 提取完整的构建日志
-            log_msgs = ""
-            for msg in e.build_log:
-                if 'stream' in msg:
-                    log_msgs += msg['stream']
-                elif 'error' in msg:
-                    log_msgs += msg['error']
+            # 提取完整的构建日志（如 pip / npm 安装报错）并封装进异常，交由上层持久化
+            log_msgs = _redact_build_arg_values(_extract_build_log(e.build_log), build_args)
             logger.error(f"BuildError during {image_tag} build. Logs:\n{log_msgs}")
-            raise RuntimeError(f"Failed to build Docker image {image_tag}. Error from daemon: {log_msgs}")
+            raise ImageBuildError(image_tag, log_msgs) from e
         except Exception as e:
-            logger.error(f"Unexpected error building {image_tag}: {e}")
-            raise e
+            safe_error = _redact_build_arg_values(str(e), build_args)
+            logger.error("Unexpected error building %s: %s", image_tag, safe_error)
+            raise RuntimeError(safe_error) from e
 
-    def prune_images(self, days_old: int = 7) -> dict:
+    def prune_images(self, days_old: int = 7) -> dict[str, int]:
         """
         清理不再使用的游离镜像 (dangling) 和超出时间阈值的失效爬虫专用镜像。
         返回清理统计信息字典。

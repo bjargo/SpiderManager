@@ -83,23 +83,37 @@ class DockerManager:
         cpu_quota: int | None = None,
         cpu_period: int | None = None,
         network: str | None = None,
+        pids_limit: int | None = None,
     ) -> docker.models.containers.Container:
         """
         根据 task_payload 启动一个爬虫容器并返回 Container 对象。
 
-        容器内执行的工作流：
-        1. wget / curl 从 MinIO 下载代码 ZIP 包
-        2. unzip 解压到 /work
-        3. cd 进入解压目录并执行 script_path 指定的命令
+        本方法职责单一：仅负责以给定的专有镜像启动容器，并将运行时环境变量
+        (TASK_ID, SPIDER_API_URL 等) 通过 Docker `environment` 参数注入，实现
+        "即取即用"。不再在启动指令里拼凑 wget / unzip / pip 安装等 shell 指令。
+
+        完整的任务调度流程（Runner Strategy）由上层执行器编排，本方法负责
+        其中的「Run容器」环节：
+
+        1. Source获取   : 从 MinIO/Git 下载源码 (project_loader.load_project)
+        2. 计算Hash     : 通过 SourceHandler 计算源码版本哈希
+        3. 检查/构建镜像: image_manager.check_image_exists / build_image
+                           (构建失败时 BuildError 日志会被持久化，见 image_manager)
+        4. Run容器      : 本方法，基于预构建的专有镜像启动容器
+
+        容器内执行的工作流由镜像内置的 CMD/ENTRYPOINT 负责（镜像构建时已将
+        代码 COPY 进镜像并设置 entrypoint，如 pip install -r requirements.txt），
+        容器启动即运行，无需在运行时再下载解压代码。
 
         Parameters
         ----------
         task_payload : dict
             至少包含:
             - task_id (str)
-            - language (str)  : Docker 镜像名，如 "python:3.11-slim"
-            - source_url (str): MinIO object key
-            - script_path (str): 执行命令，如 "python main.py"
+            - image_tag (str) : 已构建好的专有镜像 Tag，如
+                                "spider-{project}-{lang}:{hash[:12]}-{script_hash}"
+            - language (str)  : 若无 image_tag，兜底使用的基础镜像名，
+                                如 "python:3.11-slim"
             - timeout_seconds (int)
         mem_limit : str
             容器内存上限，默认 512m
@@ -109,6 +123,8 @@ class DockerManager:
             CFS CPU 周期，默认 100000
         network : str
             接入的 Docker Network 名称
+        pids_limit : int
+            容器内最大进程/线程数，默认 150，防止 Fork 炸弹耗尽宿主机 PID
 
         Returns
         -------
@@ -120,6 +136,7 @@ class DockerManager:
         cpu_quota = cpu_quota or settings.DOCKER_CPU_QUOTA
         cpu_period = cpu_period or settings.DOCKER_CPU_PERIOD
         network = network or settings.DOCKER_NETWORK
+        pids_limit = pids_limit or settings.DOCKER_PIDS_LIMIT
 
         task_id: str = task_payload["task_id"]
         # 获取由 executor 传入的已经构建好的专有镜像 Tag
@@ -142,6 +159,10 @@ class DockerManager:
         extra_hosts = {"host.docker.internal": "host-gateway"}
         extra_hosts.update(self._resolve_master_host_mapping())
 
+        # 最小特权沙箱：禁止提权、剥离全部 Linux capabilities、限制进程数
+        security_opt = ["no-new-privileges:true"]
+        cap_drop = ["ALL"]
+
         try:
             container = self.client.containers.run(
                 image=image,
@@ -152,7 +173,10 @@ class DockerManager:
                 mem_limit=mem_limit,
                 cpu_period=cpu_period,
                 cpu_quota=cpu_quota,
-                auto_remove=True,
+                pids_limit=pids_limit,
+                security_opt=security_opt,
+                cap_drop=cap_drop,
+                auto_remove=False,
                 detach=True,
             )
             logger.info(
@@ -175,7 +199,10 @@ class DockerManager:
                     mem_limit=mem_limit,
                     cpu_period=cpu_period,
                     cpu_quota=cpu_quota,
-                    auto_remove=True,
+                    pids_limit=pids_limit,
+                    security_opt=security_opt,
+                    cap_drop=cap_drop,
+                    auto_remove=False,
                     detach=True,
                 )
                 return container

@@ -1,8 +1,9 @@
 import os
 import zipfile
 import hashlib
-from io import BytesIO
+import tempfile
 from .base import SourceHandler
+from .archive import extract_zip_safely
 from minio.error import S3Error
 import logging
 logger = logging.getLogger(__name__)
@@ -15,17 +16,25 @@ class MinioSourceHandler(SourceHandler):
         url: MinIO object_name (e.g., 'spiders/spider-xxx.zip')
         """
         logger.info(f"Downloading source from MinIO object: {url} to {dest_dir}...")
+        zip_path = ""
         try:
-            # minio_manager 客户端的方法
-            data = minio_manager.download_file(url)
+            with tempfile.NamedTemporaryFile(dir=dest_dir, suffix=".zip", delete=False) as temp_file:
+                zip_path = temp_file.name
 
-            # 提取 ZIP 内容
-            with zipfile.ZipFile(BytesIO(data)) as zf:
-                zf.extractall(dest_dir)
+            minio_manager.get_client().fget_object(
+                minio_manager.bucket_name,
+                url,
+                zip_path,
+            )
+            with zipfile.ZipFile(zip_path) as zf:
+                extract_zip_safely(zf, dest_dir)
             logger.info(f"Successfully downloaded and extracted MinIO object {url}.")
         except Exception as e:
             logger.error(f"Failed to fetch from MinIO {url}: {e}")
             raise e
+        finally:
+            if zip_path and os.path.exists(zip_path):
+                os.remove(zip_path)
 
     def get_version_hash(self, local_path: str) -> str:
         """
@@ -61,7 +70,8 @@ class MinioSourceHandler(SourceHandler):
         获取 MinIO 文件的 ETag。如果不带双引号则手动加上，确保一致性。
         """
         try:
-            stat = minio_manager.client.stat_object(minio_manager.bucket_name, url)
+            client = minio_manager.get_client()
+            stat = client.stat_object(minio_manager.bucket_name, url)
             etag = stat.etag
             # MinIO 的 ETag 带有双引号，如 "d41d8cd98f00b204e9800998ecf8427e"
             if etag:

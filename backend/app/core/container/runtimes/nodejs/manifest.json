@@ -4,5 +4,8 @@
         "nodejs",
         "node.js",
         "node"
-    ]
+    ],
+    "ensure_files": {
+        "package.json": "{\n    \"name\": \"spider\",\n    \"version\": \"1.0.0\",\n    \"private\": true\n}\n"
+    }
 }

@@ -20,5 +20,9 @@ class UserCreate(schemas.BaseUserCreate):
 
 
 class UserUpdate(schemas.BaseUserUpdate):
-    """用户信息更新请求"""
+    """用户信息更新请求（Admin 使用，可改 role）"""
     role: Optional[UserRole] = None
+
+
+class UserSelfUpdate(schemas.BaseUserUpdate):
+    """用户自助更新请求：不含 role，防止普通用户越权提升自身角色。"""

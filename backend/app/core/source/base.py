@@ -16,8 +16,9 @@ class SourceHandler(ABC):
         pass
 
     @abstractmethod
-    def get_remote_fingerprint(self, url: str, **kwargs) -> str:
+    def get_remote_fingerprint(self, url: str, **kwargs) -> str | None:
         """
         获取远程源码的指纹（如 ETag 或 CommitID），用于预判镜像是否存在。
+        若远程指纹不可用或不存在则返回 None。
         """
         pass

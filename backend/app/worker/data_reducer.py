@@ -14,11 +14,13 @@ Data Reducer 引擎
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any
+from app.core.sql import quote_identifier as _quote_identifier
 from app.db.database import spider_async_engine as async_engine
 from sqlalchemy import text
 from redis.exceptions import RedisError
@@ -90,7 +92,7 @@ async def _ensure_table_exists(table_name: str) -> None:
 
         # 固定表结构：JSONB 存储业务数据
         ddl = (
-            f'CREATE TABLE IF NOT EXISTS "{table_name}" (\n'
+            f'CREATE TABLE IF NOT EXISTS {_quote_identifier(table_name)} (\n'
             f'  "_id" BIGSERIAL PRIMARY KEY,\n'
             f'  "_task_id" TEXT NOT NULL,\n'
             f'  "_data" JSONB NOT NULL,\n'
@@ -101,10 +103,10 @@ async def _ensure_table_exists(table_name: str) -> None:
         await conn.execute(text(ddl))
 
         # 为 _task_id 创建索引，加速按任务查询和清理
-        safe_index_name = f"ix_{table_name}__task_id".replace('"', '')
+        safe_index_name = f"ix_{hashlib.sha256(table_name.encode('utf-8')).hexdigest()[:24]}_task_id"
         await conn.execute(text(
-            f'CREATE INDEX IF NOT EXISTS "{safe_index_name}" '
-            f'ON "{table_name}" ("_task_id")'
+            f'CREATE INDEX IF NOT EXISTS {_quote_identifier(safe_index_name)} '
+            f'ON {_quote_identifier(table_name)} ("_task_id")'
         ))
 
         await conn.commit()
@@ -150,7 +152,7 @@ async def _batch_insert(
         params[f"data_{idx}"] = json.dumps(row, ensure_ascii=False)
 
     sql = (
-        f'INSERT INTO "{table_name}" ("_task_id", "_data") '
+        f'INSERT INTO {_quote_identifier(table_name)} ("_task_id", "_data") '
         f'VALUES {", ".join(value_groups)}'
     )
 
@@ -170,28 +172,54 @@ async def _batch_insert(
 
 
 async def _flush_buffer(
-    buffer: dict[str, TableBuffer],
-) -> None:
+    buffer: dict[tuple[str, str], TableBuffer],
+) -> int:
     """
-    将所有按表聚合的缓冲区批量写入数据库。
+    将所有按表和任务隔离的缓冲区批量写入数据库。
+
+    容错策略：单表写入失败不影响其他表，且**失败表的数据保留在缓冲区中**
+    等待下一轮重试（避免数据丢失）；仅清空写入成功的表。
 
     Args:
-        buffer: 按表名分组的缓冲区
+        buffer: 按表名和任务 ID 分组的缓冲区
+
+    Returns:
+        本次成功写入的行数
     """
-    for table_name, table_buf in buffer.items():
+    flushed = 0
+    for buffer_key in list(buffer.keys()):
+        table_name, task_id = buffer_key
+        table_buf = buffer[buffer_key]
         if not table_buf.rows:
+            buffer.pop(buffer_key, None)
             continue
         try:
             await _ensure_table_exists(table_name)
             await _batch_insert(table_name, table_buf.task_id, table_buf.rows)
         except Exception as e:
-            # 容错：单表写入失败不影响其他表
+            # 容错：单表写入失败不影响其他表；保留缓冲等待重试，防止数据丢失
             logger.error(
-                "Failed to flush %d rows into table '%s' (task=%s): %s",
-                len(table_buf.rows), table_name, table_buf.task_id, e,
+                "Failed to flush %d rows into table '%s' (task=%s), 保留待重试: %s",
+                len(table_buf.rows), table_name, task_id, e,
             )
+            continue
+        flushed += len(table_buf.rows)
+        buffer.pop(buffer_key, None)
 
-    buffer.clear()
+    return flushed
+
+
+def _pending_rows(buffer: dict[tuple[str, str], TableBuffer]) -> int:
+    """统计当前缓冲区中待入库的总行数。"""
+    return sum(len(b.rows) for b in buffer.values())
+
+
+def _table_pending_rows(buffer: dict[tuple[str, str], TableBuffer]) -> dict[str, int]:
+    """统计各物理表（跨 task_id）的待入库行数。"""
+    pending: dict[str, int] = {}
+    for (table_name, _), table_buffer in buffer.items():
+        pending[table_name] = pending.get(table_name, 0) + len(table_buffer.rows)
+    return pending
 
 
 # ─────────────────────────────────────────────────
@@ -207,15 +235,17 @@ async def data_reducer_worker() -> None:
     退出条件：仅当 asyncio.CancelledError 被触发时优雅退出。
     """
     logger.info(
-        "Data Reducer started | queue=%s | batch=%d | interval=%.1fs",
+        "Data Reducer started | queue=%s | batch=%d | interval=%.1fs | "
+        "high_watermark=%d | table_watermark=%d",
         settings.INGEST_QUEUE_KEY,
         settings.REDUCER_BATCH_SIZE,
         settings.REDUCER_FLUSH_INTERVAL,
+        settings.REDUCER_MAX_PENDING_ROWS,
+        settings.REDUCER_MAX_TABLE_ROWS,
     )
 
     # 按表名聚合的写入缓冲
-    buffer: dict[str, TableBuffer] = {}
-    total_pending = 0
+    buffer: dict[tuple[str, str], TableBuffer] = {}
     last_flush_time = time.time()
 
     while True:
@@ -223,6 +253,45 @@ async def data_reducer_worker() -> None:
             if not redis_manager.client:
                 await asyncio.sleep(1)
                 continue
+
+            # ── 背压保护 ──
+            # 内存积压触及高水位（全局行数 或 单表行数）时，暂停从 Redis 拉取新数据，
+            # 优先把缓冲区落库；若落库后仍高于水位（如数据库写入失败），
+            # 则退避休眠后重试，从而避免无界积压导致 OOM。
+            pending = _pending_rows(buffer)
+            over_global = pending >= settings.REDUCER_MAX_PENDING_ROWS
+            over_table = any(
+                rows >= settings.REDUCER_MAX_TABLE_ROWS
+                for rows in _table_pending_rows(buffer).values()
+            )
+            if over_global or over_table:
+                await _flush_buffer(buffer)
+                last_flush_time = time.time()
+                remaining_pending = _pending_rows(buffer)
+                still_over = (
+                    remaining_pending >= settings.REDUCER_MAX_PENDING_ROWS
+                    or any(
+                        rows >= settings.REDUCER_MAX_TABLE_ROWS
+                        for rows in _table_pending_rows(buffer).values()
+                    )
+                )
+                if still_over:
+                    # 落库后仍高于水位（多为 PostgreSQL 写入失败/过慢），
+                    # 暂停消费并退避，等待下一次重试成功后再恢复。
+                    logger.warning(
+                        "Data Reducer 背压触发：内存待入库 %d 行（高水位 %d/%d），"
+                        "暂停消费并退避 %.1fs",
+                        remaining_pending,
+                        settings.REDUCER_MAX_PENDING_ROWS,
+                        settings.REDUCER_MAX_TABLE_ROWS,
+                        settings.REDUCER_BACKPRESSURE_SLEEP,
+                    )
+                    await asyncio.sleep(settings.REDUCER_BACKPRESSURE_SLEEP)
+                    continue
+                logger.info(
+                    "Data Reducer 背压解除：内存待入库降至 %d 行，恢复消费。",
+                    remaining_pending,
+                )
 
             # 非阻塞式弹出：用短超时的 BRPOP 避免 busy-loop，
             # 同时保证 flush_interval 到期时能及时触发写入
@@ -267,33 +336,33 @@ async def data_reducer_worker() -> None:
                         logger.warning("Failed to publish data to channel for task %s: %s", task_id, e)
 
                     # ── 2. 缓冲区聚合 ──
-                    if table_name not in buffer:
-                        buffer[table_name] = TableBuffer()
+                    buffer_key = (table_name, task_id)
+                    if buffer_key not in buffer:
+                        buffer[buffer_key] = TableBuffer(task_id=task_id)
 
-                    table_buf = buffer[table_name]
-                    table_buf.task_id = task_id
+                    table_buf = buffer[buffer_key]
 
                     for row in data_rows:
                         if isinstance(row, dict):
                             table_buf.rows.append(row)
-                            total_pending += 1
 
             # ── 3. 判断是否需要 Flush ──
             now = time.time()
+            pending = _pending_rows(buffer)
             should_flush = (
-                total_pending >= settings.REDUCER_BATCH_SIZE
-                or (total_pending > 0 and (now - last_flush_time) >= settings.REDUCER_FLUSH_INTERVAL)
+                pending >= settings.REDUCER_BATCH_SIZE
+                or (pending > 0 and (now - last_flush_time) >= settings.REDUCER_FLUSH_INTERVAL)
             )
 
             if should_flush:
                 await _flush_buffer(buffer)
-                total_pending = 0
                 last_flush_time = time.time()
 
         except asyncio.CancelledError:
             # 优雅退出：flush 剩余数据
-            logger.info("Data Reducer shutting down, flushing remaining %d rows...", total_pending)
-            if total_pending > 0:
+            pending = _pending_rows(buffer)
+            logger.info("Data Reducer shutting down, flushing remaining %d rows...", pending)
+            if pending > 0:
                 await _flush_buffer(buffer)
             logger.info("Data Reducer stopped.")
             break

@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import hashlib
+import hmac
 import time
 from typing import Dict, Any, List
 from datetime import datetime
@@ -18,10 +19,36 @@ from app.worker.heartbeat import NODE_ID
 from app.worker.project_loader import load_project
 from app.worker.docker_manager import DockerManager
 from app.core.source.factory import SourceFactory
-from app.core.container.image_manager import image_manager
+from app.core.container.image_manager import image_manager, ImageBuildError
+from app.core.container.runners import RunnerFactory
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _format_build_error(error: Exception) -> str:
+    if isinstance(error, ImageBuildError) and error.build_log:
+        return f"Build Failed: {error}\n{error.build_log}"
+    return f"Build Failed: {error}"
+
+
+def _image_variant_hash(
+    language: str,
+    script_path: str,
+    build_args: dict[str, str],
+) -> str:
+    runner = RunnerFactory.get_runner(language)
+    build_args_json = json.dumps(build_args, sort_keys=True, separators=(",", ":"))
+    build_args_fingerprint = hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        build_args_json.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    digest = hashlib.sha256()
+    digest.update(runner.get_cache_fingerprint().encode("ascii"))
+    digest.update(script_path.encode("utf-8"))
+    digest.update(build_args_fingerprint)
+    return digest.hexdigest()[:12]
 
 
 async def _update_task_status(
@@ -36,6 +63,7 @@ async def _update_task_status(
     try:
         from app.db.database import async_session_maker
         from app.api.tasks.models import SpiderTask
+        from sqlmodel import col
         from sqlalchemy import update
 
         async with async_session_maker() as session:
@@ -51,7 +79,7 @@ async def _update_task_status(
 
             await session.execute(
                 update(SpiderTask)
-                .where(SpiderTask.task_id == task_id)
+                .where(col(SpiderTask.task_id) == task_id)
                 .values(**values)
             )
             await session.commit()
@@ -75,30 +103,63 @@ async def _flush_logs(task_id: str, log_buffer: List[str]) -> None:
         logger.error("Failed to flush %d log lines for task %s: %s", len(log_buffer), task_id, e)
 
 
+async def _emit_log_pipeline(
+    task_id: str,
+    channel: str,
+    lines: List[str],
+) -> None:
+    """
+    通过 Redis Pipeline 批量发布实时日志并写入热缓冲（Hotbuf）。
+    消除逐行独立网络 round-trip 开销，并保证迟到的 WebSocket 客户端能够完整回放爬虫日志。
+
+    :param task_id: 任务 UUID
+    :param channel: Redis Pub/Sub 频道名
+    :param lines: 日志行内容列表
+    """
+    if not lines or not redis_manager.client:
+        return
+
+    hotbuf_key = f"{settings.LOG_HOTBUF_PREFIX}{task_id}"
+    try:
+        pipe = redis_manager.client.pipeline(transaction=False)
+        for line in lines:
+            pipe.publish(channel, line)
+            pipe.rpush(hotbuf_key, line)
+        pipe.ltrim(hotbuf_key, -settings.LOG_HOTBUF_MAX, -1)
+        pipe.expire(hotbuf_key, settings.LOG_HOTBUF_TTL)
+        await pipe.execute()
+    except (ConnectionError, TimeoutError) as e:
+        logger.error("Network error in _emit_log_pipeline for task %s: %s", task_id, e)
+    except RedisError as e:
+        logger.error("Redis error in _emit_log_pipeline for task %s: %s", task_id, e)
+    except Exception as e:
+        logger.error("Unexpected error in _emit_log_pipeline for task %s: %s", task_id, e)
+
+
+async def _refresh_log_hotbuf_ttl(task_id: str) -> None:
+    """Keep completed-task logs available for the configured replay window."""
+    if not redis_manager.client:
+        return
+    try:
+        await redis_manager.client.expire(
+            f"{settings.LOG_HOTBUF_PREFIX}{task_id}",
+            settings.LOG_HOTBUF_TTL,
+        )
+    except RedisError as e:
+        logger.warning("Failed to refresh log hotbuf TTL for task %s: %s", task_id, e)
+
+
 async def _emit_log(task_id: str, channel: str, message: str) -> None:
     """
-    统一日志发送方法，同时完成三件事：
-    1. Redis Pub/Sub 实时广播（供已连接的 WebSocket 客户端）
-    2. Redis List 热缓冲（供迟到的 WebSocket 客户端回放，消除竞争时间差）
-    3. 立即落盘 PostgreSQL（保证历史查询可见）
+    统一系统日志发送方法，同时完成两件事：
+    1. 通过 _emit_log_pipeline 批量处理实时广播与 Hotbuf 写入
+    2. 立即落盘 PostgreSQL（保证历史查询可见）
 
     :param task_id: 任务 UUID
     :param channel: Redis Pub/Sub 频道名
     :param message: 日志内容
     """
-    hotbuf_key = f"{settings.LOG_HOTBUF_PREFIX}{task_id}"
-    try:
-        if redis_manager.client:
-            pipe = redis_manager.client.pipeline()
-            pipe.publish(channel, message)
-            pipe.rpush(hotbuf_key, message)
-            pipe.ltrim(hotbuf_key, -settings.LOG_HOTBUF_MAX, -1)
-            pipe.expire(hotbuf_key, settings.LOG_HOTBUF_TTL)
-            await pipe.execute()
-    except Exception as e:
-        logger.error("_emit_log redis error for task %s: %s", task_id, e)
-
-    # 立即落盘，确保迟到用户查历史日志时可见
+    await _emit_log_pipeline(task_id, channel, [message])
     await _flush_logs(task_id, [message])
 
 
@@ -126,11 +187,11 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
     容器内自动完成: 下载代码 → 解压 → 执行脚本。
     """
     task_id: str = task_data.get("task_id", "unknown")
-    project_id = task_data.get("project_id")
-    source_type = task_data.get("source_type")
-    source_url = task_data.get("source_url")
-    script_path = task_data.get("script_path")
-    language = task_data.get("language")
+    project_id: str | None = task_data.get("project_id")
+    source_type: str | None = task_data.get("source_type")
+    source_url: str | None = task_data.get("source_url")
+    script_path: str | None = task_data.get("script_path")
+    language: str | None = task_data.get("language")
 
     status_key = f"task:status:{task_id}:{NODE_ID}" if NODE_ID else f"task:status:{task_id}:public"
     channel = f"log:channel:{task_id}"
@@ -142,6 +203,21 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
     docker_mgr = DockerManager()
 
     try:
+        # 0. 防御性参数校验 (Defensive Validation & Type Narrowing)
+        if not source_type or not source_url or not script_path or not language or not project_id:
+            missing_fields = [
+                field_name
+                for field_name, val in [
+                    ("project_id", project_id),
+                    ("source_type", source_type),
+                    ("source_url", source_url),
+                    ("script_path", script_path),
+                    ("language", language),
+                ]
+                if not val
+            ]
+            raise ValueError(f"Task {task_id} missing required fields: {', '.join(missing_fields)}")
+
         # 1. 标记 running
         await _update_task_status(task_id, "running", node_id=NODE_ID, started_at=timezone.now())
         if redis_manager.client:
@@ -152,6 +228,12 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
         # 2. 预编译镜像流程 (Remote Fingerprint -> Cache Check -> Build)
         try:
             handler = SourceFactory.get_handler(source_type)
+            build_args = task_data.get("build_args") or {}
+            image_variant_hash = _image_variant_hash(
+                language,
+                script_path,
+                build_args,
+            )
             version_hash: str | None = None
             cached_image_tag: str | None = None
 
@@ -165,8 +247,10 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                     version_hash = remote_fingerprint  # 复用远程指纹，消除冗余哈希 [ZERO-DOWNLOAD]
 
                     # 提前计算镜像标签
-                    script_hash = hashlib.sha256(script_path.encode()).hexdigest()[:8]
-                    predict_tag = f"spider-{project_id}-{language.replace(':', '-')}:{version_hash[:12]}-{script_hash}"
+                    predict_tag = (
+                        f"spider-{project_id}-{language.replace(':', '-')}:"
+                        f"{version_hash[:12]}-{image_variant_hash}"
+                    )
 
                     await _emit_log(task_id, channel, f"[SYSTEM: Remote fingerprint detected: {version_hash[:12]}]")
 
@@ -182,20 +266,25 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
             # ── 2b. 执行构建 (仅在 Cache Miss 或 Probe 失败时) ──
             if not cached_image_tag:
                 # 下载源码到临时目录
-                project_dir = await load_project(task_id, source_type, source_url)
+                project_dir = await load_project(
+                    task_id,
+                    source_type,
+                    source_url,
+                    source_kwargs=task_data.get("source_kwargs", {}),
+                )
 
                 # 如果探测失败或未获取到远程指纹，则回退到本地递归哈希扫描
                 if not version_hash:
                     version_hash = await asyncio.to_thread(handler.get_version_hash, project_dir)
 
                 # 组合最终标签
-                script_hash = hashlib.sha256(script_path.encode()).hexdigest()[:8]
-                image_tag = f"spider-{project_id}-{language.replace(':', '-')}:{version_hash[:12]}-{script_hash}"
+                image_tag = (
+                    f"spider-{project_id}-{language.replace(':', '-')}:"
+                    f"{version_hash[:12]}-{image_variant_hash}"
+                )
 
                 await _emit_log(task_id, channel, f"[SYSTEM: Source Hash: {version_hash[:12]}, Image Tag: {image_tag}]")
                 await _emit_log(task_id, channel, "[SYSTEM: Building image...]")
-
-                build_args = task_data.get("build_args", {})
 
                 # 构建镜像
                 final_image_tag = await asyncio.to_thread(
@@ -214,7 +303,7 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
             await _emit_log(task_id, channel, f"[SYSTEM: Image {task_data.get('image_tag')} ready. Launching container...]")
 
         except Exception as build_err:
-            error_msg = f"Build Failed: {build_err}"
+            error_msg = _format_build_error(build_err)
             logger.error("Failed to prepare image for task %s: %s", task_id, error_msg)
             await _emit_log(task_id, channel, f"[SYSTEM: {error_msg}]")
             raise RuntimeError(error_msg)
@@ -233,9 +322,11 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
         final_status = "success"
         return_code = 0
 
+        log_iter = iter(log_stream)
+
         while True:
             try:
-                raw_chunk = await asyncio.to_thread(next, log_stream, None)
+                raw_chunk = await asyncio.to_thread(lambda: next(log_iter, None))
             except Exception as read_err:
                 logger.warning("Error reading container logs: %s", read_err)
                 break
@@ -247,19 +338,12 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
             if not text:
                 continue
 
-            # 多行日志拆分后逐行处理
-            for line in text.split("\n"):
-                if not line:
-                    continue
+            # 多行日志拆分后批量推送到 Redis Pub/Sub + Hotbuf，消除逐行网络 IO
+            chunk_lines = [line for line in text.split("\n") if line]
+            if chunk_lines:
+                await _emit_log_pipeline(task_id, channel, chunk_lines)
 
-                # 推送 Redis Pub/Sub
-                if redis_manager.client:
-                    try:
-                        await redis_manager.client.publish(channel, line)
-                    except Exception as pub_err:
-                        logger.error("Failed to publish log: %s", pub_err)
-
-                log_buffer.append(line)
+                log_buffer.extend(chunk_lines)
 
                 current_time = time.time()
                 if len(log_buffer) >= settings.LOG_FLUSH_SIZE or (current_time - last_flush_time) >= settings.LOG_FLUSH_INTERVAL:
@@ -290,12 +374,8 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
 
         # 4. 等待容器退出并获取退出码
         if not killed_by_user:
-            try:
-                result = await asyncio.to_thread(container.wait, timeout=30)
-                return_code = result.get("StatusCode", -1)
-            except Exception:
-                # 容器可能已被 auto_remove 清理，视为正常
-                return_code = 0
+            result = await asyncio.to_thread(container.wait, timeout=30)
+            return_code = result.get("StatusCode", -1)
 
             if return_code == 0:
                 final_status = "success"
@@ -344,12 +424,8 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
         # 异步关闭 Docker 客户端
         await asyncio.to_thread(docker_mgr.close)
 
-        # 清理 Redis 热缓冲 List（任务结束后不再需要）
-        if redis_manager.client:
-            try:
-                await redis_manager.client.delete(f"{settings.LOG_HOTBUF_PREFIX}{task_id}")
-            except Exception:
-                pass
+        # 平滑延长 5 分钟热缓冲有效期，避免任务刚结束时 WebSocket 瞬时刷新/重连出现空白
+        await _refresh_log_hotbuf_ttl(task_id)
 
         # 显式清理为了构建镜像临时下载的源码目录 (同步 IO 放入线程)
         if project_dir and os.path.exists(project_dir):
@@ -372,15 +448,15 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
         return
 
     # ── 以下为原有子进程模式 ──
-    task_id = task_data.get("task_id", "unknown")
-    project_id = task_data.get("project_id")
-    source_type = task_data.get("source_type")
-    source_url = task_data.get("source_url")
-    script_path = task_data.get("script_path")
+    task_id: str = task_data.get("task_id", "unknown")
+    project_id: str | None = task_data.get("project_id")
+    source_type: str | None = task_data.get("source_type")
+    source_url: str | None = task_data.get("source_url")
+    script_path: str | None = task_data.get("script_path")
     timeout = task_data.get("timeout_seconds", 3600)
 
-    if not script_path or not project_id or not source_url:
-        logger.error("Task %s is missing required fields: project_id, source_url, or script_path.", task_id)
+    if not script_path or not project_id or not source_url or not source_type:
+        logger.error("Task %s is missing required fields: project_id, source_type, source_url, or script_path.", task_id)
         return
 
     status_key = f"task:status:{task_id}:{NODE_ID}" if NODE_ID else f"task:status:{task_id}:public"
@@ -403,7 +479,12 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
 
         # 2. 动态加载代码
         try:
-            project_dir = await load_project(task_id, source_type, source_url)
+            project_dir = await load_project(
+                task_id,
+                source_type,
+                source_url,
+                source_kwargs=task_data.get("source_kwargs", {}),
+            )
         except Exception as e:
             logger.error("Failed to load project %s for task %s: %s", project_id, task_id, e)
             await _emit_log(task_id, channel, f"[SYSTEM: Failed to load project code: {e}]")
@@ -516,21 +597,22 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
                     streams_done += 1
                     continue
 
-                # 推送到 Redis Pub/Sub + 热缓冲，业务日志仍走批量 flush 以提高性能
-                hotbuf_key = f"{settings.LOG_HOTBUF_PREFIX}{task_id}"
-                if redis_manager.client:
+                batch_lines = [text]
+                while not log_queue.empty():
                     try:
-                        pipe = redis_manager.client.pipeline()
-                        pipe.publish(channel, text)
-                        pipe.rpush(hotbuf_key, text)
-                        pipe.ltrim(hotbuf_key, -settings.LOG_HOTBUF_MAX, -1)
-                        pipe.expire(hotbuf_key, settings.LOG_HOTBUF_TTL)
-                        await pipe.execute()
-                    except Exception as pub_err:
-                        logger.error("Failed to publish/hotbuf log: %s", pub_err)
+                        next_line = log_queue.get_nowait()
+                        if next_line is None:
+                            streams_done += 1
+                            break
+                        batch_lines.append(next_line)
+                    except asyncio.QueueEmpty:
+                        break
+
+                # 批量推送到 Redis Pub/Sub + 热缓冲
+                await _emit_log_pipeline(task_id, channel, batch_lines)
 
                 # 缓冲日志，批量写入 DB
-                log_buffer.append(text)
+                log_buffer.extend(batch_lines)
 
                 current_time = time.time()
                 if len(log_buffer) >= settings.LOG_FLUSH_SIZE or (current_time - last_flush_time) >= settings.LOG_FLUSH_INTERVAL:
@@ -607,12 +689,8 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
         await _update_task_status(task_id, "error", error_detail=str(e), finished_at=timezone.now())
 
     finally:
-        # 清理 Redis 热缓冲 List
-        if redis_manager.client:
-            try:
-                await redis_manager.client.delete(f"{_LOG_HOTBUF_PREFIX}{task_id}")
-            except Exception:
-                pass
+        # 平滑延长 5 分钟热缓冲有效期，避免任务刚结束时 WebSocket 瞬时刷新/重连出现空白
+        await _refresh_log_hotbuf_ttl(task_id)
 
         # 4. 彻底清理临时代码目录，防止磁盘爆满
         if project_dir and os.path.exists(project_dir):

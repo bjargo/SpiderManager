@@ -12,24 +12,23 @@ def test_minio_hash():
     dest1 = "./temp_minio_1"
     dest2 = "./temp_minio_2"
 
-    os.makedirs(os.path.join(dest1, "folder"), exist_ok=True)
-    os.makedirs(os.path.join(dest2, "folder"), exist_ok=True)
+    try:
+        os.makedirs(os.path.join(dest1, "folder"), exist_ok=True)
+        os.makedirs(os.path.join(dest2, "folder"), exist_ok=True)
 
-    with open(os.path.join(dest1, "folder", "test.py"), "w") as f:
-        f.write("print('hello')")
+        with open(os.path.join(dest1, "folder", "test.py"), "w") as f:
+            f.write("print('hello')")
 
-    with open(os.path.join(dest2, "folder", "test.py"), "w") as f:
-        f.write("print('hello')")
+        with open(os.path.join(dest2, "folder", "test.py"), "w") as f:
+            f.write("print('hello')")
 
-    hash1 = handler.get_version_hash(dest1)
-    hash2 = handler.get_version_hash(dest2)
+        hash1 = handler.get_version_hash(dest1)
+        hash2 = handler.get_version_hash(dest2)
 
-    print(f"Hash 1: {hash1}")
-    print(f"Hash 2: {hash2}")
-    if hash1 == hash2:
-        print("SUCCESS! Hashes match for same content.")
-    else:
-        print("FAIL! Hashes do not match.")
+        assert hash1 == hash2, f"Hashes do not match: {hash1} != {hash2}"
+    finally:
+        shutil.rmtree(dest1, ignore_errors=True)
+        shutil.rmtree(dest2, ignore_errors=True)
 
 if __name__ == "__main__":
     try:

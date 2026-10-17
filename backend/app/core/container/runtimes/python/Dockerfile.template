@@ -34,9 +34,15 @@ RUN (wget -q -O /tmp/gc.deb https://dl.google.com/linux/direct/google-chrome-sta
        echo "[WARN] No Chromium found in Playwright image either"; \
      fi)
 
+# ── Python 依赖安装 ──
+# 依赖清单先于业务代码 COPY，使代码变更时可以命中依赖层缓存；
+# buildkit_enabled 时额外挂载 pip 缓存目录，跨构建复用已下载的 wheel。
+COPY requirements.txt /app/
+RUN {% if buildkit_enabled %}--mount=type=cache,target=/root/.cache/pip {% endif %}pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
+
+# ── 业务代码 ──
 COPY . /app/
 RUN find . -maxdepth 2 -name "*.py"
-RUN if [ -f "requirements.txt" ]; then pip install -i https://mirrors.aliyun.com/pypi/simple/ --no-cache-dir -r requirements.txt; fi
 
 # 以 root 运行，undetected_chromedriver 在容器内需配合 --no-sandbox
 CMD {{ entrypoint }}

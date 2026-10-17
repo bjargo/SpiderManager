@@ -680,6 +680,13 @@ POST /api/tasks/data/ingest?task_id=xxx
 }
 ```
 
+Python 爬虫镜像内置 `spidermanager_sdk`，可直接使用容器注入的任务 ID 和 API 地址：
+```python
+from spidermanager_sdk import send_data
+
+send_data("products", [{"name": "商品A", "price": 99.9}])
+```
+
 **创建定时任务**：
 ```bash
 POST /api/tasks/cron

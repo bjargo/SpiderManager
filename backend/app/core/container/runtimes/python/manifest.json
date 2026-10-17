@@ -3,5 +3,11 @@
     "aliases": [
         "python",
         "py"
-    ]
+    ],
+    "ensure_files": {
+        "requirements.txt": ""
+    },
+    "include_files": {
+        "spidermanager_sdk.py": "spidermanager_sdk.py"
+    }
 }

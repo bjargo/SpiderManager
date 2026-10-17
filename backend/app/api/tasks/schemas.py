@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Any, Optional, List
 from app.api.spiders.schemas import SpiderTaskOut
 
@@ -9,8 +9,15 @@ class DataIngestRequest(BaseModel):
     爬虫在采集到数据后，通过此接口将数据推入 Redis 队列，
     由下游消费者异步落库，实现采集与存储的解耦。
     """
-    table_name: str = Field(..., min_length=1, max_length=128, description="目标数据表名")
+    table_name: str = Field(..., min_length=1, max_length=63, description="目标数据表名")
     data: list[dict[str, Any]] = Field(..., min_length=1, description="待写入的数据记录列表")
+
+    @field_validator("table_name")
+    @classmethod
+    def validate_postgres_identifier_length(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 63:
+            raise ValueError("table_name must be at most 63 bytes in UTF-8")
+        return value
 
 
 class TaskRequest(BaseModel):

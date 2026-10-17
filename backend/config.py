@@ -140,11 +140,18 @@ class Settings(BaseSettings):
     REDUCER_BATCH_SIZE: int = 100         # 累积 N 条数据触发一次批量写入
     REDUCER_FLUSH_INTERVAL: float = 1.0   # 最多 M 秒强制 flush 一次
 
+    # ── Data Reducer 内存背压保护 ──
+    # 内存中待入库行数触及高水位时暂停消费 Redis 队列并退避重试，防止 OOM
+    REDUCER_MAX_PENDING_ROWS: int = 20000    # 全局待入库行数高水位（超过则暂停拉取）
+    REDUCER_MAX_TABLE_ROWS: int = 10000      # 单表待入库行数高水位（超过则强制 flush 该表）
+    REDUCER_BACKPRESSURE_SLEEP: float = 1.0  # 触发背压后的退避休眠（秒）
+
     # ── Docker 容器资源限制 (DooD) ──
     DOCKER_MEM_LIMIT: str = "512m"
     DOCKER_CPU_PERIOD: int = 100_000   # CFS 调度器周期 (µs)
     DOCKER_CPU_QUOTA: int = 100_000    # 等效 1 核 CPU
     DOCKER_NETWORK: str = "spidermanage_net"
+    DOCKER_PIDS_LIMIT: int = 150       # 爬虫容器最大进程/线程数，防止 Fork 炸弹耗尽宿主机 PIDs
 
     # 爬虫容器内回连后端的地址
     # 容器(爬虫)通过 Docker 内部网络访问 Master API 的地址

@@ -47,13 +47,20 @@ class MinioClientManager:
             logger.error(f"Failed to initialize MinIO client: {e}")
             raise RuntimeError(f"Storage Initialization Error: {str(e)}") from e
 
+    def get_client(self) -> Minio:
+        """获取或懒加载 MinIO 客户端"""
+        if self.client is None:
+            self.init_client()
+        if self.client is None:
+            raise RuntimeError("MinIO client not initialized")
+        return self.client
+
     def upload_stream(self, object_name: str, file_data: BinaryIO, length: int = -1) -> str:
         """
         流式上传 ZIP 产物。
         当 length=-1（文件大小未知）时，必须指定 part_size 以启用分块上传。
         """
-        if not self.client:
-            raise RuntimeError("MinIO client not initialized")
+        client = self.get_client()
 
         try:
             # 当文件大小未知时，MinIO 要求指定 part_size (最小 5MB)
@@ -80,12 +87,11 @@ class MinioClientManager:
         """
         从 MinIO 下载对象的完整字节内容
         """
-        if not self.client:
-            raise RuntimeError("MinIO client not initialized")
+        client = self.get_client()
 
         response = None
         try:
-            response = self.client.get_object(
+            response = client.get_object(
                 bucket_name=self.bucket_name,
                 object_name=object_name,
             )
@@ -101,6 +107,12 @@ class MinioClientManager:
             if response is not None:
                 response.close()
                 response.release_conn()
+
+    def download_file(self, object_name: str) -> bytes:
+        """
+        从 MinIO 下载对象的完整字节内容（download_object 别名方法）
+        """
+        return self.download_object(object_name)
 
     def upload_bytes(self, object_name: str, data: bytes) -> str:
         """

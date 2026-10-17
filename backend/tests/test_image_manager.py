@@ -44,39 +44,28 @@ def test_build_image(mock_from_env):
             image_tag=image_tag,
             entrypoint="main.py"
         )
-        print("First build completed (Mocked).")
 
         # Verify files were created
         assert os.path.exists(os.path.join(test_dir, "Dockerfile")), "Dockerfile not found!"
         assert os.path.exists(os.path.join(test_dir, ".dockerignore")), ".dockerignore not found!"
 
-        with open(os.path.join(test_dir, "Dockerfile"), "r") as f:
+        with open(os.path.join(test_dir, "Dockerfile"), "r", encoding="utf-8") as f:
             content = f.read()
-            assert "FROM python:3.11-slim" in content, "Incorrect Dockerfile content"
-            assert "CMD [\"python\", \"main.py\"]" in content, "Incorrect entrypoint in Dockerfile"
-            print("Dockerfile content verified.")
+            assert "WORKDIR /app" in content, "Incorrect Dockerfile content: WORKDIR /app missing"
+            assert "COPY . /app/" in content, "Incorrect Dockerfile content: COPY . /app/ missing"
+            assert "CMD main.py" in content, "Incorrect entrypoint in Dockerfile"
 
-    except Exception as e:
-        print(f"First build failed: {e}")
-
-    print("\n--- Second Build (Mocked - Image Exists) ---")
-    mock_client.images.get.side_effect = None # Remove the exception so it "exists"
-
-    try:
-        manager.build_image(
+        # --- Second Build (Mocked - Image Exists) ---
+        mock_client.images.get.side_effect = None # Remove the exception so it "exists"
+        res = manager.build_image(
             local_path=test_dir,
             language="python",
             image_tag=image_tag,
             entrypoint="main.py"
         )
-        print("Second build check completed (Mocked).")
-    except Exception as e:
-        print(f"Second build failed: {e}")
-
-    # Cleanup
-    shutil.rmtree(test_dir, ignore_errors=True)
-    # Cleanup
-    shutil.rmtree(test_dir, ignore_errors=True)
+        assert res == image_tag
+    finally:
+        shutil.rmtree(test_dir, ignore_errors=True)
 
 if __name__ == "__main__":
     try:
