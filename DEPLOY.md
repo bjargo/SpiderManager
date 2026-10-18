@@ -381,6 +381,44 @@ docker network ls | grep spidermanage_net      # 网络名必须精确一致
 docker logs --tail 50 spidermanager-worker-1
 ```
 
+### Q4. 为什么部署后没有 `log` 文件夹 / 日志在哪里看
+
+`log/` 在 `.gitignore` 中**不随仓库下发**，因此 clone 后宿主机看不到该目录；
+它由程序启动时在**容器内**自动创建（`app/core/logger.py` 的 `os.makedirs("log")`，写入 `log.log` 与 `error.log`）。
+
+当前 `docker-compose.yml` 已把 master 的 `/app/log` 挂载到宿主机，所以启动后你会直接看到：
+
+```bash
+ls -l backend/log/            # log.log（INFO 及以上）、error.log（ERROR），按天滚动、保留 30 天
+tail -f backend/log/log.log   # 实时跟随
+tail -f backend/log/error.log # 只看错误
+```
+
+各类日志的查看方式：
+
+| 来源 | 位置 / 命令 |
+|---|---|
+| Master 文件日志（持久化） | `backend/log/{log.log,error.log}`（容器内 `/app/log`，已挂载） |
+| Master 实时输出 | `docker compose logs -f master` |
+| Worker 日志 | `docker logs -f spidermanager-worker-1`（`worker_main.py` 用 basicConfig 输出到标准输出，不写文件） |
+| 爬虫任务日志 | 平台「任务列表 → 查看日志」，或 `spider_tasks`/`task_logs` 表 |
+| 审计日志 | 平台「审计日志」页（仅 admin） |
+
+> 若你升级了 `docker-compose.yml` 但 Container 仍是旧配置，执行一次
+> `docker compose up -d master` 重新创建容器即可看到挂载生效。
+> 未挂载时，容器内 `/app/log` 会随容器删除而消失（这也是"重建后找不到历史日志"的原因）。
+
+### Q5. 镜像体积异常大（例如 800MB+）
+
+`backend/.dockerignore` 需排除本地虚拟环境，否则整个 `.venv/` 会随 `COPY . /app/` 打进镜像。
+本项目已修正该配置（`venv/`、`.venv/`、`log/` 均排除），实测镜像由 **880MB 降至 580MB**。
+如果你自定义过构建流程，请确认 `.dockerignore` 包含 `.venv/`：
+
+```bash
+# 查看镜像里是否混入了虚拟环境
+docker run --rm --entrypoint sh spidermanager-master:latest -c "du -sh /app/.venv 2>/dev/null || echo 已排除"
+```
+
 ---
 
 ## 七、实测记录（本地真实 Docker 环境）
@@ -398,3 +436,7 @@ docker logs --tail 50 spidermanager-worker-1
 4. **方案 B2**：容器不在项目网络时，用服务器真实 IP + 已发布端口可正常访问；
    用 `host.docker.internal` 会因默认 bridge 网络无内置 DNS 而超时。
 5. **配置字符集**：带 BOM 的配置文件会导致 nginx 启动失败（`unknown directive "#"`）。
+   6. **文件日志**：master 的 `/app/log` 挂载到宿主机 `backend/log` 后，
+      实测登录一次 `log.log` 增长 187 字节并写入 `API PERF: POST /api/users/login | Status: 200`。
+   7. **镜像瘦身**：`.dockerignore` 补上 `.venv/` 并把 `logs/` 修正为 `log/` 后，
+      实测 master 镜像 **880MB → 580MB**，且镜像内不再混入本地虚拟环境与历史日志文件。

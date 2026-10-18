@@ -536,6 +536,18 @@ docker compose up -d
 > Redis(6379) 与 MinIO S3 API(9000) 默认不对外发布，仅在容器网络内互通；
 > 如需对内网其他服务开放，见 `docker-compose.yml` 中各服务 `ports` 处的注释。
 
+### 日志位置
+
+| 来源 | 位置 / 命令 |
+|------|-------------|
+| Master 文件日志 | `backend/log/log.log`（INFO+）与 `backend/log/error.log`（ERROR），按天滚动保留 30 天；容器内路径为 `/app/log`，已挂载到宿主机 |
+| Master 实时输出 | `docker compose logs -f master` |
+| Worker 日志 | `docker logs -f spidermanager-worker-1`（输出到标准输出，不写文件） |
+| 爬虫任务日志 | 平台「任务列表 → 查看日志」 |
+| 审计日志 | 平台「审计日志」页（仅 admin） |
+
+> `log/` 目录不会随仓库下发（`.gitignore` 已忽略），由程序启动时自动创建。
+
 ### 4. 默认账号
 
 - **邮箱**: `admin@admin.com`

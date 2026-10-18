@@ -147,21 +147,21 @@ x-common-env:
   # 用途：每日任务统计日报通过邮件发送。SMTP_HOST 为空 = 未配置邮件能力，相关功能自动跳过。
   # 建议将下列敏感值写入宿主机环境变量或 .env（与 docker-compose.yml 同目录），避免明文入库。
   # 以 QQ 邮箱为例：smtp.qq.com / 465 / SSL，密码填「邮箱设置 → 账户 → IMAP/SMTP 服务」生成的 16 位授权码
-  SMTP_HOST: ${SMTP_HOST:-}                 # 如 smtp.qq.com；留空表示不启用邮件能力
-  SMTP_PORT: ${SMTP_PORT:-465}              # 465（SSL）或 587（STARTTLS）
-  SMTP_USER: ${SMTP_USER:-}                 # 完整邮箱地址，如 spiderbot@qq.com
-  SMTP_PASSWORD: ${SMTP_PASSWORD:-}         # 邮箱授权码（非登录密码），切勿提交到仓库
-  SMTP_FROM: ${SMTP_FROM:-}                 # 发件人，留空回落到 SMTP_USER；QQ 要求与认证账号一致
-  SMTP_USE_SSL: ${SMTP_USE_SSL:-true}       # 465 置 true
-  SMTP_START_TLS: ${SMTP_START_TLS:-false}  # 587 置 true（与 SMTP_USE_SSL 互斥，SSL 优先）
+  SMTP_HOST: ${SMTP_HOST:-} # 如 smtp.qq.com；留空表示不启用邮件能力
+  SMTP_PORT: ${SMTP_PORT:-465} # 465（SSL）或 587（STARTTLS）
+  SMTP_USER: ${SMTP_USER:-} # 完整邮箱地址，如 spiderbot@qq.com
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-} # 邮箱授权码（非登录密码），切勿提交到仓库
+  SMTP_FROM: ${SMTP_FROM:-} # 发件人，留空回落到 SMTP_USER；QQ 要求与认证账号一致
+  SMTP_USE_SSL: ${SMTP_USE_SSL:-true} # 465 置 true
+  SMTP_START_TLS: ${SMTP_START_TLS:-false} # 587 置 true（与 SMTP_USE_SSL 互斥，SSL 优先）
   SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-15}
-  SMTP_MAX_RETRIES: ${SMTP_MAX_RETRIES:-3}  # 发送失败重试次数（指数退避）
+  SMTP_MAX_RETRIES: ${SMTP_MAX_RETRIES:-3} # 发送失败重试次数（指数退避）
 
   # ── 每日任务统计日报 ──
-  DAILY_REPORT_ENABLED: ${DAILY_REPORT_ENABLED:-false}            # 开通后置 true
-  DAILY_REPORT_HOUR: ${DAILY_REPORT_HOUR:-8}                      # 每日触发时刻（应用时区）
+  DAILY_REPORT_ENABLED: ${DAILY_REPORT_ENABLED:-false} # 开通后置 true
+  DAILY_REPORT_HOUR: ${DAILY_REPORT_HOUR:-8} # 每日触发时刻（应用时区）
   DAILY_REPORT_MINUTE: ${DAILY_REPORT_MINUTE:-0}
-  DAILY_REPORT_RECIPIENTS: ${DAILY_REPORT_RECIPIENTS:-}           # 收件人，多个用英文逗号分隔
+  DAILY_REPORT_RECIPIENTS: ${DAILY_REPORT_RECIPIENTS:-} # 收件人，多个用英文逗号分隔
   DAILY_REPORT_INCLUDE_EMPTY: ${DAILY_REPORT_INCLUDE_EMPTY:-true} # 无任务日是否仍发送简报
   DAILY_REPORT_COUNT_TIMEOUT_SECONDS: ${DAILY_REPORT_COUNT_TIMEOUT_SECONDS:-60} # 数据量统计总超时（秒）
 
@@ -212,7 +212,7 @@ x-common-env:
 # ------------------------------------------------------------------------------
 #   4200  → frontend（平台 Web 入口，必开）
 #   4201  → master  （REST API / Swagger，运维直连或上层 nginx 反代）
-#   4203  → minio   （对象存储管理控制台）
+#   4202  → minio   （对象存储管理控制台）
 #   5432  → db      （PostgreSQL，供服务器内部其他服务访问；建议防火墙限内网）
 #
 #   以下服务默认不对外发布端口，仅在 Docker 网络 spidermanage_net 内互相访问：
@@ -267,7 +267,7 @@ services:
   # MinIO 对象存储
   # 用途：存储爬虫项目的代码 ZIP 包
   # 工作流：Master 上传 ZIP → Worker 爬虫容器通过 HTTP 下载
-  # 管理控制台：http://<服务器IP>:4203（用户名/密码见 minio-credentials）
+  # 管理控制台：http://<服务器IP>:4202（用户名/密码见 minio-credentials）
   #   ⚠️ S3 API(9000) 无需对外发布：Master 与爬虫容器都在容器网络内直连 minio:9000
   # ────────────────────────────────────────────
   minio:
@@ -275,7 +275,7 @@ services:
     container_name: spidermanage_minio
     restart: always
     ports:
-      - "${MINIO_CONSOLE_PORT:-4203}:9001" # [端口3] Web 管理控制台
+      - "${MINIO_CONSOLE_PORT:-4202}:9001" # [端口3] Web 管理控制台
     environment:
       <<: *minio-credentials
       TZ: *timezone
@@ -305,6 +305,9 @@ services:
       # 挂载宿主机 Docker Socket，实现 DooD（Docker-outside-of-Docker）
       # 使 Master/Worker 容器内的 DockerManager 能直接调用宿主机 Docker 守护进程
       - /var/run/docker.sock:/var/run/docker.sock
+      # 文件日志持久化：logger.py 写入容器内 /app/log（log.log 与 error.log，按天滚动保留 30 天）。
+      # 挂到宿主机后可在 ./backend/log 下直接查看，且容器重建/升级不会丢失历史日志。
+      - ./backend/log:/app/log
     environment:
       <<: *common-env # 引入全部共享环境变量
       NODE_ROLE: master # 节点角色标识，Master 会启动调度器和 MinIO 客户端
@@ -339,7 +342,10 @@ services:
     restart: always
     command: python worker_main.py # 覆盖 Dockerfile 默认的 uvicorn 启动命令
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock # DooD 必需
+      # DooD 必需：Worker 依此调用宿主机 Docker 创建爬虫容器
+      # 说明：Worker 由 worker_main.py 启动，使用 logging.basicConfig 输出到标准输出，
+      #       不写文件日志（查看方式：docker logs spidermanager-worker-1），故无需挂载 log 卷。
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       <<: *common-env
       NODE_ROLE: worker # Worker 不启动调度器和 MinIO 初始化

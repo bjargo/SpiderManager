@@ -1,5 +1,7 @@
 # Ignore local environment and cache
 venv/
+.venv/
+env/
 __pycache__/
 *.pyc
 *.pyo
@@ -26,4 +28,13 @@ coverage.xml
 # Ignore local storage data
 data/
 downloads/
-logs/
+
+# Ignore runtime file logs (程序运行时会在容器内 /app/log 重新创建)
+# ⚠️ 注意这里是单数 log/：logger.py 写入的是 log/log.log 与 log/error.log，
+#    写错为 logs/ 会把本地历史日志打进镜像。
+log/
+
+# Ignore local test/tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
