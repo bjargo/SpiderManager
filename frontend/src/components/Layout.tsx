@@ -72,7 +72,7 @@ export default function Layout() {
                     <div className="brand-icon">
                         <Activity strokeWidth={3} size={24} color="var(--accent-primary)" />
                     </div>
-                    {!isCollapsed && <h2>LightCrawlab</h2>}
+                    {!isCollapsed && <h2>SpiderManager</h2>}
                 </div>
 
                 <nav className="nav-menu">

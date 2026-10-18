@@ -207,6 +207,18 @@ x-common-env:
 # ==============================================================================
 # 服务定义
 # ==============================================================================
+# ==============================================================================
+# 端口分配（服务器为本项目分配的 3 个端口 + 数据库对内发布）
+# ------------------------------------------------------------------------------
+#   4200  → frontend（平台 Web 入口，必开）
+#   4201  → master  （REST API / Swagger，运维直连或上层 nginx 反代）
+#   4203  → minio   （对象存储管理控制台）
+#   5432  → db      （PostgreSQL，供服务器内部其他服务访问；建议防火墙限内网）
+#
+#   以下服务默认不对外发布端口，仅在 Docker 网络 spidermanage_net 内互相访问：
+#     redis:6379 / minio:9000(S3 API)
+#   如需对内部其他服务开放 Redis 或 MinIO S3 API，见各服务 ports 处的注释。
+# ==============================================================================
 services:
 
   # ────────────────────────────────────────────
@@ -221,7 +233,10 @@ services:
       <<: *pg-credentials
       TZ: *timezone
     ports:
-      - "5432:5432" # 宿主机端口:容器端口，可按需修改左侧宿主机端口
+      # 【对外发布】供服务器内部其他服务（宿主机进程 / 其他容器）通过 <服务器IP>:5432 访问。
+      # 本项目自身容器走 Docker 网络直连 db:5432，不依赖此映射。
+      # 安全建议：用防火墙仅允许内网地址段访问该端口（勿暴露到公网）。
+      - "${DB_HOST_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data # 数据持久化到 Docker Volume
     networks:
@@ -239,7 +254,10 @@ services:
     environment:
       TZ: *timezone
     ports:
-      - "6380:6379"
+      # 默认仅绑定回环地址（本项目容器走 Docker 网络直连 redis:6379，无需对外发布）。
+      # 若服务器内部其他服务也需要访问 Redis，改成下面这行即可：
+      #   - "${REDIS_HOST_PORT:-6380}:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-6380}:6379"
     volumes:
       - redis_data:/data # Redis 持久化（RDB/AOF）
     networks:
@@ -249,15 +267,15 @@ services:
   # MinIO 对象存储
   # 用途：存储爬虫项目的代码 ZIP 包
   # 工作流：Master 上传 ZIP → Worker 爬虫容器通过 HTTP 下载
-  # 管理控制台：http://localhost:9001（用户名/密码见 minio-credentials）
+  # 管理控制台：http://<服务器IP>:4203（用户名/密码见 minio-credentials）
+  #   ⚠️ S3 API(9000) 无需对外发布：Master 与爬虫容器都在容器网络内直连 minio:9000
   # ────────────────────────────────────────────
   minio:
     image: minio/minio:RELEASE.2022-10-29T06-21-33Z
     container_name: spidermanage_minio
     restart: always
     ports:
-      - "9010:9000" # S3 API 端口
-      - "9011:9001" # Web 管理控制台端口
+      - "${MINIO_CONSOLE_PORT:-4203}:9001" # [端口3] Web 管理控制台
     environment:
       <<: *minio-credentials
       TZ: *timezone
@@ -282,7 +300,7 @@ services:
     container_name: spidermanage_master
     restart: always
     ports:
-      - "8001:8000" # 将外部冲突的 8000 改为 8001
+      - "${MASTER_PORT:-4201}:8000" # [端口2] Master API（REST + Swagger /docs），供运维直连或由上层 nginx 反代
     volumes:
       # 挂载宿主机 Docker Socket，实现 DooD（Docker-outside-of-Docker）
       # 使 Master/Worker 容器内的 DockerManager 能直接调用宿主机 Docker 守护进程
@@ -347,7 +365,7 @@ services:
     container_name: spidermanage_frontend
     restart: always
     ports:
-      - "4200:80" # 宿主机 4200 → 容器内 Nginx 80
+      - "${FRONTEND_PORT:-4200}:80" # [端口1] 平台 Web 入口（静态资源 + /api + /ws-* 反代）
     environment:
       TZ: *timezone
     depends_on:

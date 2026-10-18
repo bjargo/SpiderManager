@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" aria-label="SpiderManager">
+  <!-- 左侧四条腿 -->
+  <g stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round">
+    <path d="M12 10.5C9 9.2 7 7.6 5.4 5.4" />
+    <path d="M11.4 14C7.8 13.4 5.2 13.2 2.6 12.2" />
+    <path d="M11.4 17.6C7.9 18.4 5.4 19.6 3.4 21.6" />
+    <path d="M12.6 20.8C9.6 23 7.8 25 6.4 27.4" />
+  </g>
+  <!-- 右侧四条腿（镜像） -->
+  <g stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round" transform="translate(32,0) scale(-1,1)">
+    <path d="M12 10.5C9 9.2 7 7.6 5.4 5.4" />
+    <path d="M11.4 14C7.8 13.4 5.2 13.2 2.6 12.2" />
+    <path d="M11.4 17.6C7.9 18.4 5.4 19.6 3.4 21.6" />
+    <path d="M12.6 20.8C9.6 23 7.8 25 6.4 27.4" />
+  </g>
+  <!-- 身体与头部 -->
+  <ellipse cx="16" cy="18" rx="4.4" ry="5.6" fill="#3b82f6" />
+  <circle cx="16" cy="9.6" r="3.1" fill="#3b82f6" />
+</svg>

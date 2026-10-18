@@ -11,6 +11,7 @@
 - [技术栈](#-技术栈)
 - [快速开始](#-快速开始)
 - [配置说明](#-配置说明)
+- [生产部署指南](DEPLOY.md)
 - [项目结构](#-项目结构)
 - [API 概览](#-api-概览)
 - [本地开发](#-本地开发)
@@ -520,13 +521,20 @@ docker compose up -d
 
 ### 3. 访问服务
 
-| 服务 | 地址 |
-|------|------|
-| 前端界面 | http://localhost:5173 |
-| 后端 API | http://localhost:8000 |
-| API 文档 (Swagger) | http://localhost:8000/docs |
-| MinIO 控制台 | http://localhost:9001 |
-| Prometheus 指标 | http://localhost:8000/metrics |
+服务器为本项目分配 **4200 / 4201 / 4203** 三个端口，映射如下（可在 `.env` 中用
+`FRONTEND_PORT`、`MASTER_PORT`、`MINIO_CONSOLE_PORT` 覆盖）：
+
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| 前端界面（入口） | http://服务器IP:4200 | 静态资源 + `/api` + `/ws-*` 均由该容器的 nginx 提供 |
+| 后端 API | http://服务器IP:4201 | REST 接口，供运维直连或上层 nginx 反代 |
+| API 文档 (Swagger) | http://服务器IP:4201/docs | 交互式接口文档 |
+| Prometheus 指标 | http://服务器IP:4201/metrics | 监控采集端点 |
+| MinIO 控制台 | http://服务器IP:4203 | 对象存储管理（账号见 `minio-credentials`） |
+| PostgreSQL | 服务器IP:5432 | 供服务器内部其他服务访问（建议防火墙限内网） |
+
+> Redis(6379) 与 MinIO S3 API(9000) 默认不对外发布，仅在容器网络内互通；
+> 如需对内网其他服务开放，见 `docker-compose.yml` 中各服务 `ports` 处的注释。
 
 ### 4. 默认账号
 
@@ -640,7 +648,7 @@ docker compose up -d master
 
 ```bash
 # 联调：只发给自己的测试邮箱，不影响正式收件人
-curl -X POST http://localhost:8001/api/reports/daily/send \
+curl -X POST http://localhost:4201/api/reports/daily/send \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{"date":"2026-03-05","recipients":["me@company.com"]}'
