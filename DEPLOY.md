@@ -258,7 +258,132 @@ docker exec spidermanage_db pg_dump -U postgres Spider      > backup_spider_$(da
 
 ---
 
-## 六、实测记录（本地真实 Docker 环境）
+## 六、常见问题（旧版 Docker / 网络受限）
+
+### Q1. `docker compose up -d --build` 报错、无法构建镜像
+
+先确认版本与真实报错：
+
+```bash
+docker --version
+docker compose version 2>&1 | head -2      # v2（插件）
+docker-compose version 2>&1 | head -2      # v1（独立程序，可能只有它）
+```
+
+**① Compose 不可用 / 版本过低 → 优先装 v2 插件（推荐）**
+
+```bash
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+docker compose version
+```
+
+若旧版 Docker 识别不到 `cli-plugins` 目录，则装独立二进制（同样支持 `docker compose` 用法）：
+
+```bash
+sudo curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 \
+  -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+docker-compose version
+```
+
+**② 不想升级 / 升级受限 → 用兼容脚本（任何版本都能跑）**
+
+仓库自带 [deploy/deploy-fallback.sh](deploy/deploy-fallback.sh)：改用 `docker build` 手工构建镜像，
+再让 compose 复用镜像，**完全绕开 compose 的构建能力**。
+
+```bash
+cd /opt/spidermanage
+cp deploy/deploy-fallback.sh .
+bash deploy-fallback.sh
+```
+
+其等价的手工命令（想逐步执行时用）：
+
+```bash
+docker build -t spidermanage-app:latest ./backend      # master + worker 共用
+docker build -t spidermanage-web:latest ./frontend
+
+cat > docker-compose.images.yml <<'EOF'
+services:
+  master:
+    image: spidermanage-app:latest
+  worker:
+    image: spidermanage-app:latest
+  frontend:
+    image: spidermanage-web:latest
+EOF
+
+docker-compose -f docker-compose.yml -f docker-compose.images.yml up -d   # 注意：不加 --build
+```
+
+> `docker-compose.images.yml` 是「镜像复用」文件，不修改任何受版本控制的文件；
+> 以后装好新版 Compose 想恢复正常构建，删掉它即可：`rm docker-compose.images.yml`。
+
+**③ 报 `Version in "./docker-compose.yml" is unsupported`**
+
+说明 `docker-compose` 低于 1.25，不认识 `version: '3.8'` 与网络的 `name:` 键：
+
+```bash
+sed -i "s/^version: .*/version: '3.5'/" docker-compose.yml
+docker network create spidermanage_net 2>/dev/null || true   # 保证网络名与 DOCKER_NETWORK 一致
+```
+
+> ⚠️ 网络名必须保持 `spidermanage_net`，否则爬虫容器会因找不到网络而无法访问 MinIO/Redis。
+
+**④ 脚本报 `syntax error near unexpected token`**
+
+说明文件被 Windows 编辑成了 CRLF 换行，转换即可：
+
+```bash
+sed -i 's/\r$//' deploy-fallback.sh    # 或 dos2unix deploy-fallback.sh
+```
+
+> 仓库已通过 `.gitattributes` 固定 `*.sh text eol=lf`，正常 clone 不会出现该问题。
+
+### Q2. 构建时卡住或报拉取失败（pull / TLS / timeout）
+
+服务器无法访问 Docker Hub 时，先配镜像加速或手动预拉基础镜像：
+
+```bash
+# 镜像加速（以阿里云个人加速地址为例，换成自己的）
+sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json >/dev/null <<'EOF'
+{ "registry-mirrors": ["https://<你的ID>.mirror.aliyuncs.com"] }
+EOF
+sudo systemctl restart docker
+
+# 或手动预拉全部基础镜像
+docker pull python:3.11-slim
+docker pull node:18-alpine
+docker pull nginx:1.25-alpine
+docker pull postgres:15-alpine
+docker pull redis:7-alpine
+docker pull minio/minio:RELEASE.2022-10-29T06-21-33Z
+```
+
+公司代理环境可在构建时传入：
+
+```bash
+docker build --build-arg http_proxy=http://proxy:port --build-arg https_proxy=http://proxy:port \
+  -t spidermanage-app:latest ./backend
+```
+
+### Q3. 容器起来了但爬虫任务无法执行
+
+Worker 通过挂载的 `/var/run/docker.sock` 创建爬虫容器（DooD），需确认：
+
+```bash
+ls -l /var/run/docker.sock                     # 存在且可读写
+docker network ls | grep spidermanage_net      # 网络名必须精确一致
+docker logs --tail 50 spidermanager-worker-1
+```
+
+---
+
+## 七、实测记录（本地真实 Docker 环境）
 
 1. **端口**：`4200→80`、`4201→8000`、`4203→9001`、`5432→5432` 均实测可访问；
    Web 200、`/docs` 200、登录与业务接口正常、MinIO 控制台 200。
