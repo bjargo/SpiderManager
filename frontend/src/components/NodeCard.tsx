@@ -101,7 +101,7 @@ const NodeCard: React.FC<Props> = ({ node, onUpdate }) => {
                     <div className="metric-content">
                         <span className="metric-label">DISK</span>
                         <div className="progress-bar">
-                            <div className="progress-fill" style={{ width: `${node.disk_usage}%`, backgroundColor: node.disk_usage > 90 ? 'var(--status-offline)' : '#10b981' }} />
+                            <div className="progress-fill" style={{ width: `${node.disk_usage}%`, backgroundColor: node.disk_usage > 90 ? 'var(--status-offline)' : 'var(--success-strong)' }} />
                         </div>
                         <span className="metric-value">{node.disk_usage.toFixed(1)}%</span>
                     </div>

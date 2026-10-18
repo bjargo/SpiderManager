@@ -13,10 +13,18 @@ import {
     type TrendData,
     type RecentTask
 } from '@/api/dashboard';
+import { useThemeTokens } from '@/utils/themeTokens';
 import './Dashboard.css';
+
+// ECharts 走 canvas 渲染，无法解析 CSS 变量，必须解析成具体色值后再传入
+const CHART_TOKENS = [
+    '--text-primary', '--text-secondary', '--border-color', '--bg-secondary',
+    '--status-online', '--status-offline',
+] as const;
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const tokens = useThemeTokens(CHART_TOKENS);
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [trendData, setTrendData] = useState<TrendData[]>([]);
     const [recentTasks, setRecentTasks] = useState<RecentTask[]>([]);
@@ -53,11 +61,14 @@ export default function Dashboard() {
             textStyle: { color: 'var(--text-primary)', fontSize: 16, fontWeight: 500 }
         },
         tooltip: {
-            trigger: 'axis'
+            trigger: 'axis',
+            backgroundColor: tokens['--bg-secondary'] || undefined,
+            borderColor: tokens['--border-color'] || undefined,
+            textStyle: { color: tokens['--text-primary'] || undefined },
         },
         legend: {
             data: ['成功任务', '失败任务'],
-            textStyle: { color: 'var(--text-secondary)' },
+            textStyle: { color: tokens['--text-secondary'] || undefined },
             top: 'top',
             right: 0
         },
@@ -71,13 +82,13 @@ export default function Dashboard() {
             type: 'category',
             boundaryGap: false,
             data: trendData.map(d => d.date),
-            axisLabel: { color: 'var(--text-secondary)' },
-            axisLine: { lineStyle: { color: 'var(--border-color)' } }
+            axisLabel: { color: tokens['--text-secondary'] || undefined },
+            axisLine: { lineStyle: { color: tokens['--border-color'] || undefined } }
         },
         yAxis: {
             type: 'value',
-            axisLabel: { color: 'var(--text-secondary)' },
-            splitLine: { lineStyle: { color: 'var(--border-color)', type: 'dashed' } }
+            axisLabel: { color: tokens['--text-secondary'] || undefined },
+            splitLine: { lineStyle: { color: tokens['--border-color'] || undefined, type: 'dashed' } }
         },
         series: [
             {
@@ -85,17 +96,9 @@ export default function Dashboard() {
                 type: 'line',
                 smooth: true,
                 symbolSize: 8,
-                itemStyle: { color: 'var(--status-online)' },
-                lineStyle: { width: 3 },
-                areaStyle: {
-                    color: {
-                        type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-                        colorStops: [
-                            { offset: 0, color: 'rgba(16, 185, 129, 0.4)' },
-                            { offset: 1, color: 'rgba(16, 185, 129, 0.0)' }
-                        ]
-                    }
-                },
+                itemStyle: { color: tokens['--status-online'] || undefined },
+                lineStyle: { width: 3, color: tokens['--status-online'] || undefined },
+                areaStyle: { opacity: 0.22, color: tokens['--status-online'] || undefined },
                 data: trendData.map(d => d.success)
             },
             {
@@ -103,17 +106,9 @@ export default function Dashboard() {
                 type: 'line',
                 smooth: true,
                 symbolSize: 8,
-                itemStyle: { color: 'var(--status-offline)' },
-                lineStyle: { width: 3 },
-                areaStyle: {
-                    color: {
-                        type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-                        colorStops: [
-                            { offset: 0, color: 'rgba(239, 68, 68, 0.4)' },
-                            { offset: 1, color: 'rgba(239, 68, 68, 0.0)' }
-                        ]
-                    }
-                },
+                itemStyle: { color: tokens['--status-offline'] || undefined },
+                lineStyle: { width: 3, color: tokens['--status-offline'] || undefined },
+                areaStyle: { opacity: 0.22, color: tokens['--status-offline'] || undefined },
                 data: trendData.map(d => d.failure)
             }
         ]
@@ -142,7 +137,7 @@ export default function Dashboard() {
                     style={{ cursor: 'pointer' }}
                     title="查看在线节点"
                 >
-                    <div className="mc-icon" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--status-online)' }}>
+                    <div className="mc-icon" style={{ backgroundColor: 'var(--success-soft)', color: 'var(--status-online)' }}>
                         <Activity size={24} />
                     </div>
                     <div className="mc-content">
@@ -159,7 +154,7 @@ export default function Dashboard() {
                     style={{ cursor: 'pointer' }}
                     title="查看所有爬虫"
                 >
-                    <div className="mc-icon" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-primary)' }}>
+                    <div className="mc-icon" style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent-primary)' }}>
                         <Box size={24} />
                     </div>
                     <div className="mc-content">
@@ -174,7 +169,7 @@ export default function Dashboard() {
                     style={{ cursor: 'pointer' }}
                     title="查看今日任务"
                 >
-                    <div className="mc-icon" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: 'var(--status-busy)' }}>
+                    <div className="mc-icon" style={{ backgroundColor: 'var(--warning-soft)', color: 'var(--status-busy)' }}>
                         <Zap size={24} />
                     </div>
                     <div className="mc-content">
@@ -189,7 +184,7 @@ export default function Dashboard() {
                     style={{ cursor: 'pointer' }}
                     title="查看今日失败任务"
                 >
-                    <div className="mc-icon" style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: 'var(--status-offline)' }}>
+                    <div className="mc-icon" style={{ backgroundColor: 'var(--danger-soft)', color: 'var(--status-offline)' }}>
                         <AlertTriangle size={24} />
                     </div>
                     <div className="mc-content">

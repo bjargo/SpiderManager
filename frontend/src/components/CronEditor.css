@@ -35,10 +35,10 @@
 }
 
 .cev2-preset.active {
-    background: rgba(59, 130, 246, 0.12);
-    color: #60a5fa;
-    border-color: rgba(59, 130, 246, 0.4);
-    box-shadow: 0 0 8px rgba(59, 130, 246, 0.15);
+    background: var(--accent-soft);
+    color: var(--info);
+    border-color: var(--accent-border);
+    box-shadow: 0 0 8px var(--accent-soft);
 }
 
 /* ── 字段选择区域 ── */
@@ -75,12 +75,12 @@
 }
 
 .ce-field-trigger.active {
-    border-color: rgba(59, 130, 246, 0.35);
-    background: rgba(59, 130, 246, 0.06);
+    border-color: var(--accent-border);
+    background: var(--accent-soft);
 }
 
 .ce-field-trigger.active .ce-field-value {
-    color: #60a5fa;
+    color: var(--info);
 }
 
 .ce-field-label {
@@ -173,9 +173,9 @@
 }
 
 .ce-field-option.selected {
-    background: rgba(59, 130, 246, 0.15);
-    color: #60a5fa;
-    border-color: rgba(59, 130, 246, 0.3);
+    background: var(--accent-soft);
+    color: var(--info);
+    border-color: var(--accent-border);
 }
 
 /* ── 自定义输入 ── */
@@ -199,7 +199,7 @@
 }
 
 .ce-field-custom-input:focus {
-    border-color: rgba(59, 130, 246, 0.4);
+    border-color: var(--accent-border);
 }
 
 .ce-field-custom-input::placeholder {
@@ -257,8 +257,8 @@
     align-items: center;
     gap: 6px;
     font-size: 0.78rem;
-    color: #4ade80;
-    background: rgba(74, 222, 128, 0.08);
+    color: var(--success);
+    background: var(--success-soft);
     padding: 7px 14px;
     border-radius: 8px;
     white-space: nowrap;

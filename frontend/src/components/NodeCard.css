@@ -8,7 +8,7 @@
 
 .node-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 30px var(--overlay-bg);
 }
 
 .nc-header {
@@ -46,12 +46,12 @@
 }
 
 .edit-confirm {
-    color: #10b981;
+    color: var(--success-strong);
     cursor: pointer;
 }
 
 .edit-cancel {
-    color: #ef4444;
+    color: var(--danger-strong);
     cursor: pointer;
 }
 
@@ -164,15 +164,15 @@
 }
 
 .role-master {
-    background: rgba(139, 92, 246, 0.2);
-    color: #a78bfa;
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    background: var(--violet-border);
+    color: var(--violet);
+    border: 1px solid var(--violet-border);
 }
 
 .role-worker {
-    background: rgba(16, 185, 129, 0.2);
-    color: #34d399;
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    background: var(--success-border);
+    color: var(--success);
+    border: 1px solid var(--success-border);
 }
 
 .node-ip {

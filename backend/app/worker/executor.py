@@ -20,6 +20,7 @@ from app.worker.project_loader import load_project
 from app.worker.docker_manager import DockerManager
 from app.core.source.factory import SourceFactory
 from app.core.container.image_manager import image_manager, ImageBuildError
+from app.core.container.runners import normalize_entrypoint
 from app.core.container.runners import RunnerFactory
 from config import settings
 
@@ -217,6 +218,9 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                 if not val
             ]
             raise ValueError(f"Task {task_id} missing required fields: {', '.join(missing_fields)}")
+
+        script_path = normalize_entrypoint(language, script_path)
+        task_data["script_path"] = script_path
 
         # 1. 标记 running
         await _update_task_status(task_id, "running", node_id=NODE_ID, started_at=timezone.now())

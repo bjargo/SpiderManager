@@ -590,7 +590,7 @@ function RunSpiderModal({ spider, nodes, onClose, showToast }: RunModalProps) {
                                             padding: '10px 14px',
                                             border: `1px solid ${selectedNodes.includes(node.node_id) ? 'var(--accent-primary)' : 'var(--border-color)'}`,
                                             borderRadius: 8,
-                                            background: selectedNodes.includes(node.node_id) ? 'rgba(59,130,246,0.08)' : 'var(--bg-input)',
+                                            background: selectedNodes.includes(node.node_id) ? 'var(--accent-soft)' : 'var(--bg-input)',
                                             cursor: 'pointer',
                                             transition: 'all 0.15s',
                                             fontSize: '0.85rem',
@@ -602,7 +602,7 @@ function RunSpiderModal({ spider, nodes, onClose, showToast }: RunModalProps) {
                                             onChange={() => toggleNode(node.node_id)}
                                             style={{ accentColor: 'var(--accent-primary)' }}
                                         />
-                                        <span className="sv-node-dot" style={{ background: node.status === 'online' ? '#4ade80' : '#f87171' }} />
+                                        <span className="sv-node-dot" style={{ background: node.status === 'online' ? 'var(--success)' : 'var(--danger)' }} />
                                         <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
                                             {node.name || node.node_id}
                                         </span>
@@ -794,7 +794,7 @@ export default function SpidersView() {
                                     style={{
                                         transition: 'background-color 0.5s',
                                         backgroundColor: highlightId === s.id
-                                            ? 'rgba(56, 189, 248, 0.15)'
+                                            ? 'var(--info-soft)'
                                             : 'transparent'
                                     }}
                                 >

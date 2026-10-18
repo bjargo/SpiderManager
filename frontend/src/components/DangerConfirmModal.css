@@ -3,7 +3,7 @@
     position: fixed;
     inset: 0;
     z-index: 1000;
-    background: rgba(0, 0, 0, 0.65);
+    background: var(--overlay-bg);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
@@ -26,10 +26,10 @@
     width: 420px;
     max-width: 92vw;
     background: var(--bg-card);
-    border: 1px solid rgba(239, 68, 68, 0.35);
+    border: 1px solid var(--danger-border);
     border-radius: 14px;
     overflow: hidden;
-    box-shadow: 0 20px 60px var(--shadow-color), 0 0 0 1px rgba(239, 68, 68, 0.15);
+    box-shadow: 0 20px 60px var(--shadow-color), 0 0 0 1px var(--danger-soft);
     animation: dcm-slide-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -48,7 +48,7 @@
 /* ── 顶部红色警告色条 ── */
 .dcm-danger-strip {
     height: 4px;
-    background: linear-gradient(90deg, #dc2626, #ef4444, #f87171);
+    background: linear-gradient(90deg, var(--danger-strong), var(--danger-strong), var(--danger));
 }
 
 .dcm-content {
@@ -66,8 +66,8 @@
 .dcm-icon-wrap {
     width: 36px;
     height: 36px;
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: var(--danger-soft);
+    border: 1px solid var(--danger-border);
     border-radius: 8px;
     display: flex;
     align-items: center;
@@ -76,7 +76,7 @@
 }
 
 .dcm-icon {
-    color: #ef4444;
+    color: var(--danger-strong);
 }
 
 .dcm-title {
@@ -123,12 +123,12 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.25);
+    background: var(--danger-soft);
+    border: 1px solid var(--danger-border);
     border-radius: 6px;
     padding: 6px 10px;
     font-size: 0.78rem;
-    color: #f87171;
+    color: var(--danger);
 }
 
 /* ── 按钮行 ── */
@@ -168,14 +168,14 @@
 }
 
 .dcm-btn-danger {
-    background: linear-gradient(135deg, #dc2626, #ef4444);
-    color: #fff;
-    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+    background: linear-gradient(135deg, var(--danger-strong), var(--danger-strong));
+    color: var(--text-on-danger);
+    box-shadow: 0 4px 14px var(--danger-border);
 }
 
 .dcm-btn-danger:hover:not(:disabled) {
-    background: linear-gradient(135deg, #b91c1c, #dc2626);
-    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.5);
+    background: linear-gradient(135deg, var(--danger-strong), var(--danger-strong));
+    box-shadow: 0 4px 20px var(--danger-strong);
     transform: translateY(-1px);
 }
 

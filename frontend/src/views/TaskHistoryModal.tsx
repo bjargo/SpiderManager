@@ -17,20 +17,20 @@ interface TaskHistoryModalProps {
 // ── 工具函数 ──
 function getStatusColor(status: TaskStatus): string {
     const map: Record<string, string> = {
-        running: '#3b82f6', pending: '#f59e0b', success: '#4ade80',
-        failed: '#f87171', timeout: '#fb923c', error: '#ef4444', idle: '#6b7280',
+        running: 'var(--accent-primary)', pending: 'var(--warning-strong)', success: 'var(--success)',
+        failed: 'var(--danger)', timeout: 'var(--warning-strong)', error: 'var(--danger-strong)', idle: 'var(--text-muted)',
     };
-    return map[status] ?? '#6b7280';
+    return map[status] ?? 'var(--text-muted)';
 }
 
 function getStatusBg(status: TaskStatus): string {
     const map: Record<string, string> = {
-        running: 'rgba(59,130,246,0.15)', pending: 'rgba(245,158,11,0.15)',
-        success: 'rgba(74,222,128,0.15)', failed: 'rgba(248,113,113,0.15)',
-        timeout: 'rgba(251,146,60,0.15)', error: 'rgba(239,68,68,0.15)',
-        idle: 'rgba(107,114,128,0.15)',
+        running: 'var(--accent-soft)', pending: 'var(--warning-soft)',
+        success: 'var(--success-soft)', failed: 'var(--danger-soft)',
+        timeout: 'var(--warning-soft)', error: 'var(--danger-soft)',
+        idle: 'var(--neutral-soft)',
     };
-    return map[status] ?? 'rgba(107,114,128,0.15)';
+    return map[status] ?? 'var(--neutral-soft)';
 }
 
 function getStatusLabel(status: TaskStatus): string {

@@ -215,14 +215,14 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-primary), #8b5cf6);
+    background: linear-gradient(135deg, var(--accent-primary), var(--violet-strong));
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 600;
     font-size: 0.85rem;
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    color: var(--text-on-accent);
+    box-shadow: 0 2px 8px var(--shadow-color);
 }
 
 .logout-btn {
@@ -240,7 +240,7 @@
 
 .logout-btn:hover {
     color: var(--status-offline);
-    background: rgba(239, 68, 68, 0.1);
+    background: var(--danger-soft);
 }
 
 .content-wrapper {

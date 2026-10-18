@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface LogItem {
     id: string;
@@ -9,14 +9,59 @@ interface UseLogSocketOptions {
     onStreamEnd?: () => void;
 }
 
+// 日志缓冲区上限：仅保留最近 MAX_LOGS 行
+const MAX_LOGS = 5000;
+// 日志刷新节流间隔：合并该时间窗内到达的多条日志，只触发一次 state 更新
+const FLUSH_INTERVAL_MS = 100;
+
+type LogSocketStatus = 'idle' | 'connecting' | 'connected' | 'error' | 'closed' | 'stream_ended';
+
 export function useLogSocket(taskId: string | null, options?: UseLogSocketOptions) {
     const [logs, setLogs] = useState<LogItem[]>([]);
-    const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'error' | 'closed' | 'stream_ended'>('idle');
+    const [status, setStatus] = useState<LogSocketStatus>('idle');
     const wsRef = useRef<WebSocket | null>(null);
 
-    useEffect(() => {
-        // 每次 taskId 变化时清空旧日志
+    // 待提交的日志：WS 每条消息只入队，由定时器批量合并后再 setState
+    const pendingRef = useRef<LogItem[]>([]);
+    const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const seqRef = useRef(0);
+    const streamEndedRef = useRef(false);
+    const onStreamEndRef = useRef(options?.onStreamEnd);
+    onStreamEndRef.current = options?.onStreamEnd;
+
+    const flush = useCallback(() => {
+        if (flushTimerRef.current !== null) {
+            clearTimeout(flushTimerRef.current);
+            flushTimerRef.current = null;
+        }
+        const pending = pendingRef.current;
+        if (pending.length === 0) return;
+        pendingRef.current = [];
+        setLogs(prev => {
+            const merged = prev.concat(pending);
+            return merged.length > MAX_LOGS ? merged.slice(merged.length - MAX_LOGS) : merged;
+        });
+    }, []);
+
+    const scheduleFlush = useCallback(() => {
+        if (flushTimerRef.current !== null) return;
+        flushTimerRef.current = setTimeout(flush, FLUSH_INTERVAL_MS);
+    }, [flush]);
+
+    const clearLogs = useCallback(() => {
+        pendingRef.current = [];
         setLogs([]);
+    }, []);
+
+    useEffect(() => {
+        // 每次 taskId 变化时清空旧日志与待提交队列
+        setLogs([]);
+        pendingRef.current = [];
+        streamEndedRef.current = false;
+        if (flushTimerRef.current !== null) {
+            clearTimeout(flushTimerRef.current);
+            flushTimerRef.current = null;
+        }
 
         if (!taskId) {
             setStatus('idle');
@@ -46,22 +91,15 @@ export function useLogSocket(taskId: string | null, options?: UseLogSocketOption
                 if (!isMounted) return;
                 // 检测流结束哨兵：不追加到日志，触发回调通知组件切换到历史模式
                 if (event.data === '[STREAM_END]') {
-                    console.log(`[WS] Stream ended for task ${taskId}`);
-                    if (isMounted) setStatus('stream_ended');
+                    streamEndedRef.current = true;
+                    flush();
+                    setStatus('stream_ended');
                     ws.close();
-                    options?.onStreamEnd?.();
+                    onStreamEndRef.current?.();
                     return;
                 }
-                setLogs(prev => {
-                    const updated = [...prev, {
-                        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(),
-                        text: event.data
-                    }];
-                    if (updated.length > 5000) {
-                        return updated.slice(updated.length - 5000);
-                    }
-                    return updated;
-                });
+                pendingRef.current.push({ id: String(++seqRef.current), text: event.data });
+                scheduleFlush();
             };
 
             ws.onerror = (err) => {
@@ -69,17 +107,14 @@ export function useLogSocket(taskId: string | null, options?: UseLogSocketOption
                 if (isMounted) setStatus('error');
             };
 
-            ws.onclose = (event) => {
-                console.warn(`[WS] Connection closed for ${taskId}, code: ${event.code}`);
-                if (isMounted) {
-                    // stream_ended 是正常关闭，不需要重连也不覆盖状态
-                    if (status !== 'stream_ended') {
-                        setStatus('closed');
-                        // 仅在曾经成功连接后才自动重连（避免无效重试）
-                        if (wasConnected) {
-                            reconnectTimer = setTimeout(connect, 3000);
-                        }
-                    }
+            ws.onclose = () => {
+                if (!isMounted) return;
+                // 哨兵触发的正常关闭不重连，也不覆盖 stream_ended 状态
+                if (streamEndedRef.current) return;
+                setStatus('closed');
+                // 仅在曾经成功连接后才自动重连（避免无效重试）
+                if (wasConnected) {
+                    reconnectTimer = setTimeout(connect, 3000);
                 }
             };
         };
@@ -89,11 +124,15 @@ export function useLogSocket(taskId: string | null, options?: UseLogSocketOption
         return () => {
             isMounted = false;
             clearTimeout(reconnectTimer);
+            if (flushTimerRef.current !== null) {
+                clearTimeout(flushTimerRef.current);
+                flushTimerRef.current = null;
+            }
             if (wsRef.current) {
                 wsRef.current.close();
             }
         };
-    }, [taskId]);
+    }, [taskId, flush, scheduleFlush]);
 
-    return { logs, status, setLogs };
+    return { logs, status, clearLogs };
 }

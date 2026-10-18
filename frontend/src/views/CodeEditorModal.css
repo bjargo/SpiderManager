@@ -7,7 +7,7 @@
     position: fixed;
     inset: 0;
     z-index: 1000;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--overlay-bg);
     backdrop-filter: blur(6px);
     display: flex;
     align-items: center;
@@ -111,14 +111,14 @@
 }
 
 .ce-btn-save {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    background: linear-gradient(135deg, var(--accent-solid), var(--accent-solid-hover));
+    color: var(--text-on-accent);
+    box-shadow: 0 2px 8px var(--accent-border);
 }
 
 .ce-btn-save:hover:not(:disabled) {
-    background: linear-gradient(135deg, #60a5fa, #3b82f6);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    background: linear-gradient(135deg, var(--info), var(--accent-primary));
+    box-shadow: 0 4px 12px var(--accent-border);
     transform: translateY(-1px);
 }
 
@@ -170,9 +170,9 @@
 
 .ce-sidebar-add-btn {
     margin-left: auto;
-    background: rgba(59, 130, 246, 0.12);
-    border: 1px solid rgba(59, 130, 246, 0.25);
-    color: #60a5fa;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-border);
+    color: var(--info);
     width: 24px;
     height: 24px;
     border-radius: 6px;
@@ -184,8 +184,8 @@
 }
 
 .ce-sidebar-add-btn:hover {
-    background: rgba(59, 130, 246, 0.25);
-    color: #93bbfd;
+    background: var(--accent-border);
+    color: var(--info);
     transform: scale(1.05);
 }
 
@@ -201,7 +201,7 @@
 .ce-file-create-input {
     flex: 1;
     background: var(--bg-input);
-    border: 1px solid rgba(59, 130, 246, 0.4);
+    border: 1px solid var(--accent-border);
     border-radius: 4px;
     padding: 5px 8px;
     font-size: 0.78rem;
@@ -212,7 +212,7 @@
 }
 
 .ce-file-create-input:focus {
-    border-color: #3b82f6;
+    border-color: var(--accent-primary);
 }
 
 .ce-file-create-input::placeholder {
@@ -233,11 +233,11 @@
 }
 
 .ce-file-create-confirm {
-    color: #4ade80;
+    color: var(--success);
 }
 
 .ce-file-create-confirm:hover:not(:disabled) {
-    background: rgba(74, 222, 128, 0.15);
+    background: var(--success-soft);
 }
 
 .ce-file-create-confirm:disabled {
@@ -250,8 +250,8 @@
 }
 
 .ce-file-create-cancel:hover:not(:disabled) {
-    color: #f87171;
-    background: rgba(248, 113, 113, 0.1);
+    color: var(--danger);
+    background: var(--danger-soft);
 }
 
 .ce-file-list {
@@ -265,7 +265,7 @@
 }
 
 .ce-file-list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--border-hover);
     border-radius: 2px;
 }
 
@@ -277,7 +277,7 @@
     padding: 6px 12px;
     cursor: pointer;
     font-size: 0.82rem;
-    color: var(--text-secondary, #9ca3af);
+    color: var(--text-secondary, var(--text-secondary));
     transition: all 0.12s ease;
     user-select: none;
 }
@@ -304,7 +304,7 @@
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    color: #f59e0b;
+    color: var(--warning-strong);
     opacity: 0.8;
 }
 
@@ -329,7 +329,7 @@
     padding: 6px 12px;
     cursor: pointer;
     font-size: 0.82rem;
-    color: var(--text-secondary, #9ca3af);
+    color: var(--text-secondary, var(--text-secondary));
     transition: all 0.12s ease;
     border-left: 2px solid transparent;
 }
@@ -340,9 +340,9 @@
 }
 
 .ce-file-item.active {
-    background: rgba(59, 130, 246, 0.08);
-    color: #60a5fa;
-    border-left-color: #3b82f6;
+    background: var(--accent-soft);
+    color: var(--info);
+    border-left-color: var(--accent-primary);
 }
 
 .ce-file-item .file-icon {
@@ -385,8 +385,8 @@
 }
 
 .ce-file-delete-btn:hover {
-    color: #f87171;
-    background: rgba(248, 113, 113, 0.12);
+    color: var(--danger);
+    background: var(--danger-soft);
 }
 
 /* ── 删除确认 ── */
@@ -411,11 +411,11 @@
 }
 
 .ce-file-delete-yes {
-    color: #f87171;
+    color: var(--danger);
 }
 
 .ce-file-delete-yes:hover:not(:disabled) {
-    background: rgba(248, 113, 113, 0.15);
+    background: var(--danger-soft);
 }
 
 .ce-file-delete-yes:disabled {
@@ -508,7 +508,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #f59e0b;
+    background: var(--warning-strong);
     display: inline-block;
     margin-left: 4px;
     animation: ce-pulse 1.5s infinite;
@@ -559,54 +559,24 @@
 }
 
 .ce-status-bar .ce-status-lang {
-    background: rgba(59, 130, 246, 0.15);
-    color: #60a5fa;
+    background: var(--accent-soft);
+    color: var(--info);
     padding: 2px 8px;
     border-radius: 4px;
     font-weight: 500;
 }
 
 /* =================================================
-   强制暗黑覆盖（解决 light-theme 下较高优先级的 CSS 冲突）
+   亮暗模式统一：编辑器外壳沿用全局令牌，配色由 CodeMirror 主题（oneDark / 默认亮色）
+   随主题切换，不再强制暗色，避免浅色页面里嵌入一块"黑盒子"。
    ================================================= */
-:root.light-theme .ce-header {
-    background: #1a1b2e !important;
-    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+:root.light-theme .ce-codemirror-wrap .cm-editor {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
 }
 
-:root.light-theme .ce-sidebar {
-    background: #1a1d24 !important;
-    border-right-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-:root.light-theme .ce-sidebar-header {
-    background: #1a1d24 !important;
-    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-:root.light-theme .ce-status-bar {
-    background: #1a1d24 !important;
-    border-top-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-:root.light-theme .ce-file-path,
-:root.light-theme .ce-file-create-input {
-    background: rgba(0, 0, 0, 0.25) !important;
-}
-
-:root.light-theme .ce-file-create-row,
-:root.light-theme .ce-file-item:hover,
-:root.light-theme .ce-tree-dir:hover {
-    background: rgba(255, 255, 255, 0.05) !important;
-}
-
-:root.light-theme .ce-btn-close {
-    background: rgba(255, 255, 255, 0.05) !important;
-    color: #94a3b8 !important;
-    border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-:root.light-theme .ce-btn-close:hover {
-    background: rgba(0, 0, 0, 0.25) !important;
-    color: #e2e8f0 !important;
+:root.light-theme .ce-codemirror-wrap .cm-gutters {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    border-right: 1px solid var(--border-color);
 }

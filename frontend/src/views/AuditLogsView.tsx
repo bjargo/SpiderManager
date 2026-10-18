@@ -14,10 +14,10 @@ function fmtTime(iso: string): string {
 // ── 操作动作颜色标签 ──
 function ActionBadge({ action }: { action: string }) {
     const colorMap: Record<string, string> = {
-        CREATE: '#4ade80', UPDATE: '#60a5fa', DELETE: '#f87171',
-        LOGIN: '#a78bfa', LOGOUT: '#94a3b8', STATUS: '#fbbf24',
+        CREATE: 'var(--success)', UPDATE: 'var(--info)', DELETE: 'var(--danger)',
+        LOGIN: 'var(--violet)', LOGOUT: 'var(--text-secondary)', STATUS: 'var(--warning)',
     };
-    const color = colorMap[action.toUpperCase()] ?? '#64748b';
+    const color = colorMap[action.toUpperCase()] ?? 'var(--text-muted)';
     return (
         <span className="al-badge" style={{ color, borderColor: color + '44', background: color + '14' }}>
             {action.toUpperCase()}
@@ -27,7 +27,7 @@ function ActionBadge({ action }: { action: string }) {
 
 // ── 状态码颜色 ──
 function StatusCode({ code }: { code: number }) {
-    const color = code < 300 ? '#4ade80' : code < 400 ? '#fbbf24' : '#f87171';
+    const color = code < 300 ? 'var(--success)' : code < 400 ? 'var(--warning)' : 'var(--danger)';
     return <span style={{ color, fontWeight: 600, fontFamily: 'monospace' }}>{code}</span>;
 }
 

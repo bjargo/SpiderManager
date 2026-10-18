@@ -35,6 +35,7 @@ def create_tables() -> None:
     import app.api.projects.models  # noqa: F401
     import app.api.users.models  # noqa: F401
     import app.api.tasks.models  # noqa: F401
+    import app.api.reports.models  # noqa: F401
     import app.core.audit.models  # noqa: F401
     try:
         with _sync_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:

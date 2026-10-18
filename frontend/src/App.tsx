@@ -9,6 +9,8 @@ import ProjectManagementView from '@/views/ProjectManagementView';
 import Login from '@/views/Login';
 import AuditLogsView from '@/views/AuditLogsView';
 import UserManagementView from '@/views/UserManagementView';
+import DataExplorerView from '@/views/DataExplorerView';
+import SystemSettings from '@/views/SystemSettings';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem('token');
@@ -37,8 +39,10 @@ function App() {
           <Route path="spiders" element={<SpidersView />} />
           <Route path="tasks" element={<TaskManagement />} />
           <Route path="schedules" element={<Scheduler />} />
+          <Route path="data" element={<DataExplorerView />} />
           <Route path="audit-logs" element={<AuditLogsView />} />
           <Route path="users" element={<UserManagementView />} />
+          <Route path="settings" element={<SystemSettings />} />
         </Route>
       </Routes>
     </BrowserRouter>

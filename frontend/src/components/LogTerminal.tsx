@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLogSocket } from '@/hooks/useLogSocket';
 import { useDataSocket, DataItem } from '@/hooks/useDataSocket';
 import { fetchTaskLogs, fetchTaskData } from '@/api/task';
@@ -15,6 +15,52 @@ interface Props {
 }
 
 type TabType = 'logs' | 'data';
+
+// 窗口化渲染上限：单次最多挂载的日志行 / 数据条数，避免上万 DOM 节点造成卡顿
+const MAX_RENDERED_LOGS = 1200;
+const MAX_RENDERED_DATA = 200;
+
+/** 格式化 JSON 显示 */
+const formatJson = (data: Record<string, any>): string => JSON.stringify(data, null, 2);
+
+/** 获取数据字段预览 */
+const getDataPreview = (data: Record<string, any>): string => {
+    const keys = Object.keys(data);
+    if (keys.length === 0) return '{}';
+    const preview = keys.slice(0, 3).map(k => `${k}: ${String(data[k]).substring(0, 20)}`).join(', ');
+    return keys.length > 3 ? `${preview}...` : preview;
+};
+
+/** 单行日志：memo 化后，追加新日志不会导致已有行重新渲染 */
+const LogLine = React.memo(({ text }: { text: string }) => (
+    <div className="log-line">
+        <span style={{ color: 'var(--code-text-muted)', marginRight: '8px' }}>$</span>
+        {text}
+    </div>
+));
+
+interface DataRowProps {
+    item: DataItem;
+    indexLabel: string;
+    selected: boolean;
+    onToggle: (item: DataItem) => void;
+}
+
+/** 单条数据卡片：预览与时间格式化成本较高，memo 化避免整列表重算 */
+const DataRow = React.memo(({ item, indexLabel, selected, onToggle }: DataRowProps) => (
+    <div
+        className={classNames('term-data-item', { selected })}
+        onClick={() => onToggle(item)}
+    >
+        <div className="term-data-item-header">
+            <span className="term-data-item-index">#{indexLabel}</span>
+            <span className="term-data-item-time">
+                {item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : ''}
+            </span>
+        </div>
+        <div className="term-data-item-preview">{getDataPreview(item.data)}</div>
+    </div>
+));
 
 const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, defaultTab = 'logs' }) => {
     const isLive = taskStatus === 'running' || taskStatus === 'pending';
@@ -45,7 +91,7 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
         setLogHistoryLoading(false);
     };
 
-    const { logs: wsLogs, status: wsStatus, setLogs: setWsLogs } = useLogSocket(
+    const { logs: wsLogs, status: wsStatus, clearLogs } = useLogSocket(
         isLive ? taskId : null,
         { onStreamEnd: () => taskId && loadLogHistory(taskId) }
     );
@@ -67,6 +113,12 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const [autoScroll, setAutoScroll] = useState(true);
+    // 上滚时固定的窗口末端：新数据不再推动视口内容
+    const logPinEndRef = useRef<number | null>(null);
+    const dataPinEndRef = useRef<number | null>(null);
+    const pendingScrollAdjustRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
+    const [logWindowSize, setLogWindowSize] = useState(MAX_RENDERED_LOGS);
+    const [dataWindowSize, setDataWindowSize] = useState(MAX_RENDERED_DATA);
 
     // 加载历史数据
     const loadDataHistory = async (tid: string, page: number = 0) => {
@@ -108,6 +160,40 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
     // 当前显示的数据
     const displayData = isLive ? wsData : historyData;
 
+    // 窗口化渲染：只挂载列表尾部固定数量的节点。
+    // 用户上滚时固定窗口末端（新数据不推动视口内容），触顶时向前追加更多行。
+    const logWindow = useMemo(() => {
+        const pinnedEnd = logPinEndRef.current;
+        const end = pinnedEnd === null ? logs.length : Math.min(pinnedEnd, logs.length);
+        const start = Math.max(0, end - logWindowSize);
+        return { items: logs.slice(start, end), hidden: start };
+    }, [logs, logWindowSize]);
+
+    const dataWindow = useMemo(() => {
+        const pinnedEnd = dataPinEndRef.current;
+        const end = pinnedEnd === null ? displayData.length : Math.min(pinnedEnd, displayData.length);
+        const start = Math.max(0, end - dataWindowSize);
+        return { items: displayData.slice(start, end), start, hidden: start };
+    }, [displayData, dataWindowSize]);
+
+    const handleToggleData = useCallback((item: DataItem) => {
+        setSelectedDataItem(prev => (prev?.id === item.id ? null : item));
+    }, []);
+
+    // 数据行元素：仅新增条目或选中项变化时才重建，其余行由 memo 复用
+    const dataRows = useMemo(() => dataWindow.items.map((item, idx) => {
+        const absoluteIdx = dataWindow.start + idx;
+        return (
+            <DataRow
+                key={item.id}
+                item={item}
+                indexLabel={isLive ? String(item.seq ?? absoluteIdx + 1) : String(historyData.length - absoluteIdx)}
+                selected={selectedDataItem?.id === item.id}
+                onToggle={handleToggleData}
+            />
+        );
+    }), [dataWindow, isLive, historyData.length, selectedDataItem?.id, handleToggleData]);
+
     // Auto scroll logic
     useEffect(() => {
         if (autoScroll && scrollRef.current && activeTab === 'logs') {
@@ -115,27 +201,48 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
         }
     }, [logs, autoScroll, activeTab]);
 
+    // 向前追加窗口后修正滚动位置，保证视口内容不跳动
+    useLayoutEffect(() => {
+        const pending = pendingScrollAdjustRef.current;
+        pendingScrollAdjustRef.current = null;
+        const el = scrollRef.current;
+        if (!pending || !el) return;
+        el.scrollTop = pending.scrollTop + (el.scrollHeight - pending.scrollHeight);
+    }, [logWindowSize, dataWindowSize]);
+
     const handleScroll = () => {
-        if (!scrollRef.current) return;
-        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-        if (scrollHeight - scrollTop - clientHeight > 30) {
-            setAutoScroll(false);
-        } else {
-            setAutoScroll(true);
+        const el = scrollRef.current;
+        if (!el) return;
+        const isLogTab = activeTab === 'logs';
+        const { scrollTop, scrollHeight, clientHeight } = el;
+        const atBottom = scrollHeight - scrollTop - clientHeight <= 30;
+        setAutoScroll(atBottom);
+
+        const pinRef = isLogTab ? logPinEndRef : dataPinEndRef;
+        const total = isLogTab ? logs.length : displayData.length;
+        const windowSize = isLogTab ? logWindowSize : dataWindowSize;
+        const baseSize = isLogTab ? MAX_RENDERED_LOGS : MAX_RENDERED_DATA;
+
+        if (atBottom) {
+            // 回到尾部：恢复默认窗口并跟随最新内容
+            pinRef.current = null;
+            if (windowSize !== baseSize) {
+                if (isLogTab) setLogWindowSize(baseSize);
+                else setDataWindowSize(baseSize);
+            }
+            return;
         }
-    };
 
-    // 格式化 JSON 显示
-    const formatJson = (data: Record<string, any>): string => {
-        return JSON.stringify(data, null, 2);
-    };
+        if (pinRef.current === null) {
+            pinRef.current = total;
+        }
 
-    // 获取数据字段预览
-    const getDataPreview = (data: Record<string, any>): string => {
-        const keys = Object.keys(data);
-        if (keys.length === 0) return '{}';
-        const preview = keys.slice(0, 3).map(k => `${k}: ${String(data[k]).substring(0, 20)}`).join(', ');
-        return keys.length > 3 ? `${preview}...` : preview;
+        // 触顶时向前加载更多，避免看不到更早的内容
+        if (scrollTop <= 40 && (pinRef.current ?? total) - windowSize > 0) {
+            pendingScrollAdjustRef.current = { scrollTop, scrollHeight };
+            if (isLogTab) setLogWindowSize(size => size + MAX_RENDERED_LOGS);
+            else setDataWindowSize(size => size + MAX_RENDERED_DATA);
+        }
     };
 
     if (!taskId) return null;
@@ -183,7 +290,7 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
                 <div className="term-tabs">
                     <button
                         className={classNames('term-tab', { active: activeTab === 'logs' })}
-                        onClick={() => setActiveTab('logs')}
+                        onClick={() => { logPinEndRef.current = null; setActiveTab('logs'); }}
                     >
                         <Terminal size={14} />
                         <span>Logs</span>
@@ -194,7 +301,7 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
                     </button>
                     <button
                         className={classNames('term-tab', { active: activeTab === 'data' })}
-                        onClick={() => setActiveTab('data')}
+                        onClick={() => { dataPinEndRef.current = null; setActiveTab('data'); }}
                     >
                         <Database size={14} />
                         <span>Data</span>
@@ -215,7 +322,7 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
                             >
                                 <RefreshCw size={14} className={classNames({ spin: wsStatus === 'connecting' })} />
                             </button>
-                            <button className="term-btn" title="Clear Logs" onClick={() => setWsLogs([])}>
+                            <button className="term-btn" title="Clear Logs" onClick={clearLogs}>
                                 <XCircle size={14} />
                             </button>
                         </>
@@ -285,11 +392,13 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
                         </div>
                     ) : (
                         <div className="term-content">
-                            {logs.map(log => (
-                                <div key={log.id} className="log-line">
-                                    <span style={{ color: '#555', marginRight: '8px' }}>$</span>
-                                    {log.text}
+                            {logWindow.hidden > 0 && (
+                                <div className="log-line" style={{ color: 'var(--text-muted)' }}>
+                                    … {logWindow.hidden} earlier line(s) hidden — scroll up to load more
                                 </div>
+                            )}
+                            {logWindow.items.map(log => (
+                                <LogLine key={log.id} text={log.text} />
                             ))}
                         </div>
                     )}
@@ -305,19 +414,14 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
                                 }
                             </div>
                         ) : (
-                            displayData.map((item, idx) => (
-                                <div
-                                    key={item.id}
-                                    className={classNames('term-data-item', { selected: selectedDataItem?.id === item.id })}
-                                    onClick={() => setSelectedDataItem(selectedDataItem?.id === item.id ? null : item)}
-                                >
-                                    <div className="term-data-item-header">
-                                        <span className="term-data-item-index">#{isLive ? wsData.length - idx : historyData.length - idx}</span>
-                                        <span className="term-data-item-time">{item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : ''}</span>
+                            <>
+                                {dataWindow.hidden > 0 && (
+                                    <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                                        … {dataWindow.hidden} earlier record(s) hidden — scroll up to load more
                                     </div>
-                                    <div className="term-data-item-preview">{getDataPreview(item.data)}</div>
-                                </div>
-                            ))
+                                )}
+                                {dataRows}
+                            </>
                         )}
                     </div>
                     {selectedDataItem && (
@@ -338,4 +442,4 @@ const LogTerminal: React.FC<Props> = ({ taskId, taskStatus, onStop, onClose, def
     );
 };
 
-export default LogTerminal;
+export default React.memo(LogTerminal);

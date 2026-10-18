@@ -187,6 +187,14 @@ export default function TaskManagement() {
         }
     };
 
+    // 稳定引用：避免任务列表轮询刷新时整块抽屉（含大量日志/数据节点）重渲染
+    const handleStopFromTerminal = useCallback(async (tid: string) => {
+        await stopTask(tid);
+        loadTasks();
+    }, [loadTasks]);
+
+    const handleCloseTerminal = useCallback(() => setActiveTaskId(null), []);
+
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'success':
@@ -369,7 +377,7 @@ export default function TaskManagement() {
                                                                     width: '8px',
                                                                     height: '8px',
                                                                     borderRadius: '50%',
-                                                                    backgroundColor: node.status === 'online' ? '#4ade80' : '#f87171',
+                                                                    backgroundColor: node.status === 'online' ? 'var(--success)' : 'var(--danger)',
                                                                     flexShrink: 0
                                                                 }}
                                                             />
@@ -441,17 +449,14 @@ export default function TaskManagement() {
                 {/* 侧边日志抽屉 */}
                 {activeTaskId && (
                     <>
-                        <div className="tm-log-drawer-overlay" onClick={() => setActiveTaskId(null)} />
+                        <div className="tm-log-drawer-overlay" onClick={handleCloseTerminal} />
                         <div className="tm-log-drawer animate-fade-in-right">
                             <LogTerminal
                                 taskId={activeTaskId}
                                 taskStatus={tasks.find(t => t.task_id === activeTaskId)?.status}
                                 defaultTab={activeTab}
-                                onStop={async (tid) => {
-                                    await stopTask(tid);
-                                    loadTasks();
-                                }}
-                                onClose={() => setActiveTaskId(null)}
+                                onStop={handleStopFromTerminal}
+                                onClose={handleCloseTerminal}
                             />
                         </div>
                     </>

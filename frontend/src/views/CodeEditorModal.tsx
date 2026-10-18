@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, Save, FileCode, Loader2, FolderOpen, Folder, Plus, Trash2, Check, ChevronRight, ChevronDown } from 'lucide-react';
 import { fetchSpiderFiles, fetchSpiderFileContent, saveSpiderFileContent, createSpiderFile, deleteSpiderFile } from '@/api/spider';
+import { useThemeMode } from '@/hooks/useThemeMode';
 import type { SpiderItem } from '@/types/spider';
 
 // CodeMirror 6
 import { EditorView, basicSetup } from 'codemirror';
-import { EditorState } from '@codemirror/state';
+import { EditorState, Compartment } from '@codemirror/state';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { python } from '@codemirror/lang-python';
 import { json } from '@codemirror/lang-json';
@@ -240,6 +241,11 @@ export default function CodeEditorModal({ spider, onClose, showToast }: CodeEdit
 
     const editorRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
+    // 主题跟随全局亮/暗模式：暗色用 oneDark，浅色用 CodeMirror 默认亮色
+    const themeMode = useThemeMode();
+    const themeModeRef = useRef(themeMode);
+    themeModeRef.current = themeMode;
+    const themeCompartment = useRef(new Compartment());
 
     const isModified = fileContent !== originalContent;
 
@@ -328,7 +334,8 @@ export default function CodeEditorModal({ spider, onClose, showToast }: CodeEdit
         const langExt = getLanguageExtension(selectedFile);
         const extensions = [
             basicSetup,
-            oneDark,
+            // 主题放进 Compartment，切换主题时热替换，不重建编辑器实例
+            themeCompartment.current.of(themeModeRef.current === 'dark' ? oneDark : []),
             EditorView.updateListener.of((update) => {
                 if (update.docChanged) {
                     const newContent = update.state.doc.toString();
@@ -355,6 +362,15 @@ export default function CodeEditorModal({ spider, onClose, showToast }: CodeEdit
             }
         };
     }, [fileLoading, selectedFile, originalContent]);
+
+    // 切换主题时热更新编辑器配色，保留光标与滚动位置
+    useEffect(() => {
+        const view = viewRef.current;
+        if (!view) return;
+        view.dispatch({
+            effects: themeCompartment.current.reconfigure(themeMode === 'dark' ? oneDark : []),
+        });
+    }, [themeMode]);
 
     // ── 保存文件 ──
     const handleSave = useCallback(async () => {

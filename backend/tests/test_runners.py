@@ -5,7 +5,7 @@ import pytest
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.core.container.runners import RunnerFactory, PluginRunner
+from app.core.container.runners import RunnerFactory, PluginRunner, normalize_entrypoint
 
 
 def test_runner_factory_detection():
@@ -22,6 +22,13 @@ def test_runner_factory_detection():
     # 兜底到 default
     default_runner = RunnerFactory.get_runner("ruby")
     assert isinstance(default_runner, PluginRunner)
+
+
+def test_normalize_python_script_entrypoint():
+    assert normalize_entrypoint("python:3.11-slim", "main.py") == "python main.py"
+    assert normalize_entrypoint("python", "scripts/main.py") == "python scripts/main.py"
+    assert normalize_entrypoint("python", "python main.py") == "python main.py"
+    assert normalize_entrypoint("node", "main.py") == "main.py"
 
 
 def test_runner_prepare_context():
@@ -68,6 +75,7 @@ def test_python_runner_build_cache_optimization():
     assert "--mount=type=cache" not in without_buildkit
     assert "--no-cache-dir" not in with_buildkit
     assert with_buildkit.index("COPY requirements.txt") < with_buildkit.index("COPY . /app/")
+    assert "pip show spidermanager-sdk" in with_buildkit
 
 
 def test_builtin_sdk_is_unignored_when_project_dockerignore_excludes_it(tmp_path):

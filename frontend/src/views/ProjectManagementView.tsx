@@ -172,8 +172,8 @@ function DeleteModal({ project, onClose, onDeleted, showToast }: DeleteModalProp
                 </div>
                 <div className="pm-modal-body">
                     <p className="pm-confirm-text">
-                        确定删除项目 <strong style={{ color: '#fff' }}>{project.name}</strong> 吗？
-                        这将同时删除该项目下关联的 <strong style={{ color: '#f87171' }}>{project.spider_count}</strong> 个爬虫，此操作不可撤销！
+                        确定删除项目 <strong style={{ color: 'var(--text-primary)' }}>{project.name}</strong> 吗？
+                        这将同时删除该项目下关联的 <strong style={{ color: 'var(--danger)' }}>{project.spider_count}</strong> 个爬虫，此操作不可撤销！
                     </p>
                 </div>
                 <div className="pm-modal-footer">

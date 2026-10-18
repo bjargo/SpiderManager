@@ -6,7 +6,7 @@
     position: fixed;
     inset: 0;
     z-index: 1000;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--overlay-bg);
     backdrop-filter: blur(6px);
     display: flex;
     align-items: center;
@@ -109,7 +109,7 @@
 }
 
 .th-body::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--border-hover);
     border-radius: 3px;
 }
 
@@ -189,22 +189,22 @@
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
-    background: rgba(59, 130, 246, 0.1);
-    color: #60a5fa;
+    background: var(--accent-soft);
+    color: var(--info);
 }
 
 .th-log-btn:hover {
-    background: rgba(59, 130, 246, 0.2);
+    background: var(--accent-border);
     transform: translateY(-1px);
 }
 
 .th-log-btn.live {
-    background: rgba(74, 222, 128, 0.1);
-    color: #4ade80;
+    background: var(--success-soft);
+    color: var(--success);
 }
 
 .th-log-btn.live:hover {
-    background: rgba(74, 222, 128, 0.2);
+    background: var(--success-border);
 }
 
 /* 空/加载 */
@@ -250,7 +250,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #3b82f6;
+    background: var(--accent-solid);
     animation: th-running 1.5s infinite;
 }
 

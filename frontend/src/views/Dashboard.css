@@ -31,7 +31,7 @@
 
 .metric-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 8px 24px var(--shadow-color);
 }
 
 .mc-icon {
@@ -162,17 +162,17 @@
 }
 
 .fi-badge.success {
-    background: rgba(16, 185, 129, 0.15);
+    background: var(--success-soft);
     color: var(--status-online);
 }
 
 .fi-badge.failed {
-    background: rgba(239, 68, 68, 0.15);
+    background: var(--danger-soft);
     color: var(--status-offline);
 }
 
 .fi-badge.running {
-    background: rgba(59, 130, 246, 0.15);
+    background: var(--accent-soft);
     color: var(--accent-primary);
 }
 

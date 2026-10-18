@@ -7,8 +7,12 @@ from redis.exceptions import RedisError, ConnectionError as RedisConnectionError
 
 from config import settings
 from app.core.redis import redis_manager
+from app.core.timezone import now as tz_now
 
 logger = logging.getLogger(__name__)
+
+# 日报配置同步间隔（秒）：设置页面保存后，Leader 最多在此时间内自动对齐调度
+REPORT_SYNC_INTERVAL_SECONDS = 60
 
 # 使用 Redis 作为唯一的持久化后端
 jobstores = {
@@ -164,6 +168,21 @@ def start_scheduler():
             id='daily_image_prune',
             replace_existing=True,
             misfire_grace_time=3600
+        )
+
+        # 日报配置存放在数据库中（前端设置页面可改），由配置同步器按需注册/改点/移除
+        # 日报任务。这里只注册同步器本身：它立即执行一次，并在后续每分钟对齐一次配置。
+        from app.worker.report_jobs import sync_report_schedule
+
+        scheduler.add_job(
+            sync_report_schedule,
+            trigger='interval',
+            seconds=REPORT_SYNC_INTERVAL_SECONDS,
+            id='report_settings_sync',
+            replace_existing=True,
+            next_run_time=tz_now(),
+            coalesce=True,
+            max_instances=1,
         )
 
         scheduler.start()

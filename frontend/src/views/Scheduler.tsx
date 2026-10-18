@@ -264,7 +264,7 @@ function ScheduleModal({ mode, initial, projects, spiders, nodes, tasks, onClose
                                                 checked={selectedNodes.includes(node.node_id)}
                                                 onChange={() => toggleNode(node.node_id)}
                                             />
-                                            <span className="sch-node-dot" style={{ background: node.status === 'online' ? '#4ade80' : '#f87171' }} />
+                                            <span className="sch-node-dot" style={{ background: node.status === 'online' ? 'var(--success)' : 'var(--danger)' }} />
                                             <span className="sch-node-name">{node.name || node.node_id}</span>
                                             <span className="sch-node-info">{node.ip} · CPU {node.cpu_usage.toFixed(0)}% · 现已分配 {assignedCount} 个任务</span>
                                         </label>
@@ -637,7 +637,7 @@ export default function Scheduler() {
                                                                 <span
                                                                     className="sch-node-dot"
                                                                     style={{
-                                                                        background: node.status === 'online' ? '#4ade80' : '#f87171',
+                                                                        background: node.status === 'online' ? 'var(--success)' : 'var(--danger)',
                                                                         marginLeft: '4px'
                                                                     }}
                                                                 />

@@ -163,13 +163,13 @@
 }
 
 .sch-btn-primary {
-    background: var(--accent-primary);
-    color: #fff;
+    background: var(--accent-solid);
+    color: var(--text-on-accent);
 }
 
 .sch-btn-primary:hover:not(:disabled) {
     background: var(--accent-hover);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+    box-shadow: 0 4px 12px var(--accent-border);
 }
 
 .sch-btn-ghost {
@@ -184,12 +184,12 @@
 
 .sch-btn-danger {
     background: var(--status-offline);
-    color: #fff;
+    color: var(--text-on-danger);
 }
 
 .sch-btn-danger:hover:not(:disabled) {
     filter: brightness(1.1);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+    box-shadow: 0 4px 12px var(--danger-border);
 }
 
 /* ─────────────────────────────── 表格 ─────────────────────────────── */
@@ -294,9 +294,9 @@
 }
 
 .sch-node-tag.public {
-    background: rgba(16, 185, 129, 0.1);
-    border-color: rgba(16, 185, 129, 0.2);
-    color: var(--status-online, #10b981);
+    background: var(--success-soft);
+    border-color: var(--success-border);
+    color: var(--status-online, var(--success-strong));
 }
 
 /* 下次执行时间 */
@@ -342,7 +342,7 @@
 
 .sch-icon-btn.delete:hover {
     color: var(--status-offline);
-    background: rgba(239, 68, 68, 0.1);
+    background: var(--danger-soft);
 }
 
 /* ─────────────────────────────── Switch 开关 ─────────────────────────────── */
@@ -359,8 +359,8 @@
 }
 
 .sch-switch.on {
-    background: var(--status-online, #10b981);
-    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+    background: var(--status-online, var(--success-strong));
+    box-shadow: 0 0 8px var(--success-border);
 }
 
 .sch-switch.off {
@@ -379,10 +379,10 @@
     left: 3px;
     width: 18px;
     height: 18px;
-    background: #fff;
+    background: var(--switch-knob);
     border-radius: 50%;
     transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 1px 4px var(--shadow-color);
 }
 
 .sch-switch.on .sch-switch-thumb {
@@ -408,7 +408,7 @@
 .sch-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--overlay-bg);
     backdrop-filter: blur(4px);
     z-index: 1000;
     display: flex;
@@ -578,7 +578,7 @@
 
 .sch-node-item.selected {
     border-color: var(--accent-primary);
-    background: rgba(59, 130, 246, 0.08);
+    background: var(--accent-soft);
 }
 
 .sch-node-item input[type="checkbox"] {
@@ -637,7 +637,7 @@
     border-radius: 10px;
     font-size: 0.875rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-on-accent);
     backdrop-filter: blur(8px);
     animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     pointer-events: none;
@@ -656,15 +656,15 @@
 }
 
 .sch-toast-success {
-    background: rgba(16, 185, 129, 0.9);
+    background: var(--success-strong);
 }
 
 .sch-toast-error {
-    background: rgba(239, 68, 68, 0.9);
+    background: var(--danger-strong);
 }
 
 .sch-toast-info {
-    background: rgba(59, 130, 246, 0.9);
+    background: var(--accent-hover);
 }
 
 /* ─────────────────────────────── 动画 ─────────────────────────────── */

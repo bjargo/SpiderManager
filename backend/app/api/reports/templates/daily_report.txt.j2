@@ -1,0 +1,50 @@
+SpiderManage 每日任务日报
+统计日期：{{ report.report_date }}
+统计窗口：{{ fmt_dt(report.window_start) }} ~ {{ fmt_dt(report.window_end) }}
+
+【总览】
+任务总数：{{ report.total_tasks }}
+成功：{{ report.success_count }}
+失败：{{ report.failed_count }}
+已取消：{{ report.cancelled_count }}
+未完成：{{ report.pending_count }}
+成功率：{{ '%.1f'|format(report.success_rate * 100) }}%
+采集数据量：{{ fmt_int(report.total_records) }} 条
+平均耗时：{{ fmt_duration(report.avg_duration_seconds) }}
+{% if report.records_partial %}
+[警告] 数据量统计不完整，被跳过的数据表：{{ report.records_skipped_tables | join('、') }}
+{% endif %}
+【运行成功】
+{% if report.success_spiders %}
+{% for spider in report.success_spiders %}
+- {{ spider.spider_name }}：运行 {{ spider.runs }} 次，采集 {{ fmt_int(spider.records) }} 条，耗时 {{ fmt_duration(spider.duration_seconds) }}
+{% endfor %}
+合计：{{ report.success_count }} 次运行，采集 {{ fmt_int(report.total_records) }} 条
+{% else %}
+- 当日没有运行成功的爬虫
+{% endif %}
+【运行失败】
+{% if report.failed_tasks %}
+{% for task in report.failed_tasks %}
+- {{ task.spider_name }} [{{ task.status }}] 任务ID {{ task.task_id }} 耗时 {{ fmt_duration(task.duration_seconds) }}
+  错误：{{ task.error_detail or '（无异常信息）' }}
+{% endfor %}
+{% else %}
+- 当日没有失败任务
+{% endif %}
+{% if report.cancelled_tasks %}
+【已取消】
+{% for task in report.cancelled_tasks %}
+- {{ task.spider_name }}（{{ task.task_id }}）
+{% endfor %}
+{% endif %}
+{% if report.pending_tasks %}
+【未完成】
+{% for task in report.pending_tasks %}
+- {{ task.spider_name }}（{{ task.status }}）
+{% endfor %}
+{% endif %}
+--
+统计口径：以任务创建时间归属日期；失败包含 failed / timeout / error；成功率 = 成功 ÷（成功 + 失败）。
+{{ report.records_scope_note }}。
+报告生成时间：{{ fmt_dt(report.generated_at) }} · 由 SpiderManage 自动发送。

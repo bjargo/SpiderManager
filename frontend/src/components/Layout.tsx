@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
     Activity, Play, CalendarClock, Settings, LayoutDashboard,
-    FolderKanban, LogOut, PanelLeftClose, PanelLeftOpen, Sun, Moon, PackageOpen, ShieldCheck, Users
+    FolderKanban, LogOut, PanelLeftClose, PanelLeftOpen, Sun, Moon, PackageOpen, ShieldCheck, Users, Database
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth, clearAuthCache } from '@/hooks/useAuth';
@@ -49,11 +49,13 @@ export default function Layout() {
         { name: '节点管理', path: '/nodes', icon: <Activity size={20} /> },
         { name: '爬虫管理', path: '/spiders', icon: <FolderKanban size={20} /> },
         { name: '任务列表', path: '/tasks', icon: <Play size={20} /> },
+        { name: '数据查看', path: '/data', icon: <Database size={20} /> },
         { name: '定时调度', path: '/schedules', icon: <CalendarClock size={20} /> },
-        // 审计日志 & 用户管理：仅 admin 可见
+        // 审计日志 & 用户管理 & 系统设置：仅 admin 可见
         ...(isAdmin ? [
             { name: '审计日志', path: '/audit-logs', icon: <ShieldCheck size={20} /> },
             { name: '用户管理', path: '/users', icon: <Users size={20} /> },
+            { name: '系统设置', path: '/settings', icon: <Settings size={20} /> },
         ] : []),
     ];
 
@@ -92,8 +94,8 @@ export default function Layout() {
                         {isCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
                         {!isCollapsed && <span>折叠面板</span>}
                     </button>
-                    {!isCollapsed && (
-                        <button className="settings-btn" style={{ marginTop: '8px' }}>
+                    {!isCollapsed && isAdmin && (
+                        <button className="settings-btn" style={{ marginTop: '8px' }} onClick={() => navigate('/settings')}>
                             <Settings size={20} />
                             <span>设置</span>
                         </button>
@@ -129,7 +131,7 @@ export default function Layout() {
                                     {user?.email ?? '加载中...'}
                                 </span>
                                 {user?.role && (
-                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted, #64748b)', letterSpacing: '0.05em' }}>
+                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted, var(--text-muted))', letterSpacing: '0.05em' }}>
                                         {user.role.toUpperCase()}
                                     </span>
                                 )}

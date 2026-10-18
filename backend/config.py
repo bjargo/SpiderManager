@@ -104,6 +104,29 @@ class Settings(BaseSettings):
     # 所有节点的业务时间戳统一使用此时区，通过 docker-compose.yml 环境变量覆盖
     TIMEZONE: str = "Asia/Shanghai"
 
+    # ── 邮件发送配置 (SMTP) ──
+    # SMTP_HOST 为空表示未配置邮件能力，所有邮件相关功能自动跳过（不影响其它功能）
+    # 以 QQ 邮箱为例：
+    #   SMTP_HOST=smtp.qq.com / SMTP_PORT=465 / SMTP_USE_SSL=true
+    #   SMTP_USER=xxx@qq.com / SMTP_PASSWORD=邮箱设置中生成的 16 位授权码（非登录密码）
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 465
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""            # 建议使用邮箱授权码；该值严禁写入日志
+    SMTP_FROM: str = ""                # 发件人地址，留空时回落到 SMTP_USER
+    SMTP_USE_SSL: bool = True          # 465：连接即 SSL（QQ/163 等推荐）
+    SMTP_START_TLS: bool = False       # 587：明文连接后 STARTTLS；与 SMTP_USE_SSL 同时开启时以 SSL 优先
+    SMTP_TIMEOUT_SECONDS: int = 15     # 单次 SMTP 操作超时（秒）
+    SMTP_MAX_RETRIES: int = 3          # 发送失败重试次数（指数退避）
+
+    # ── 每日任务统计日报 ──
+    DAILY_REPORT_ENABLED: bool = False            # 默认关闭；配置 SMTP 后开启
+    DAILY_REPORT_HOUR: int = 8                    # 每日触发时刻（应用时区），默认 08:00
+    DAILY_REPORT_MINUTE: int = 0
+    DAILY_REPORT_RECIPIENTS: str = ""             # 收件人列表，支持逗号/分号/换行分隔多个地址
+    DAILY_REPORT_INCLUDE_EMPTY: bool = True       # 当日无任务时是否仍发送简报
+    DAILY_REPORT_COUNT_TIMEOUT_SECONDS: int = 60  # 采集数据量统计总超时（秒），超时按已统计部分继续
+
     # ── 节点识别配置 ──
     NODE_ROLE: str = "master"  # 可选: master, worker
     NODE_ID: str = _get_persistent_node_id()

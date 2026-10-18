@@ -39,11 +39,11 @@ const createUser = (data: CreateUserPayload): Promise<ApiResponse<CreateUserResu
 
 function RoleBadge({ role }: { role: string }) {
     const colorMap: Record<string, { color: string; bg: string }> = {
-        admin: { color: '#f87171', bg: '#f8717120' },
-        developer: { color: '#60a5fa', bg: '#60a5fa20' },
-        viewer: { color: '#4ade80', bg: '#4ade8020' },
+        admin: { color: 'var(--danger)', bg: 'var(--danger-soft)' },
+        developer: { color: 'var(--info)', bg: 'var(--info-soft)' },
+        viewer: { color: 'var(--success)', bg: 'var(--success-soft)' },
     };
-    const c = colorMap[role] ?? { color: '#94a3b8', bg: '#94a3b820' };
+    const c = colorMap[role] ?? { color: 'var(--text-secondary)', bg: 'var(--neutral-soft)' };
     return (
         <span style={{
             color: c.color, background: c.bg,
@@ -62,7 +62,7 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
     return (
         <span style={{
             display: 'inline-flex', alignItems: 'center', gap: '4px',
-            color: ok ? '#4ade80' : '#f87171',
+            color: ok ? 'var(--success)' : 'var(--danger)',
             fontSize: '0.78rem', fontWeight: 500,
         }}>
             {ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
@@ -193,7 +193,7 @@ export default function UserManagementView() {
                     <button
                         className="al-btn-base al-btn-primary"
                         onClick={() => setShowCreateModal(true)}
-                        style={{ background: 'var(--accent-primary)', color: 'white', border: 'none' }}
+                        style={{ background: 'var(--accent-solid)', color: 'var(--text-on-accent)', border: 'none' }}
                     >
                         <UserPlus size={16} />
                         <span>创建新用户</span>
@@ -270,8 +270,8 @@ export default function UserManagementView() {
                                                 className="al-btn-base"
                                                 style={{
                                                     padding: '4px 10px', fontSize: '0.75rem',
-                                                    background: user.is_active ? 'rgba(248, 113, 113, 0.1)' : 'rgba(74, 222, 128, 0.1)',
-                                                    color: user.is_active ? '#f87171' : '#4ade80',
+                                                    background: user.is_active ? 'var(--danger-soft)' : 'var(--success-soft)',
+                                                    color: user.is_active ? 'var(--danger)' : 'var(--success)',
                                                     border: 'none'
                                                 }}
                                                 onClick={() => handleToggleStatus(user)}
@@ -297,7 +297,7 @@ export default function UserManagementView() {
             {/* 创建用户模态框 */}
             {showCreateModal && (
                 <div className="ce-overlay animate-fade-in" onClick={handleCloseCreateModal} style={{
-                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+                    position: 'fixed', inset: 0, background: 'var(--overlay-bg)', backdropFilter: 'blur(4px)',
                     zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
                     <div className="ce-container glass-panel animate-scale-in"
@@ -323,7 +323,7 @@ export default function UserManagementView() {
                         <div className="ce-body" style={{ padding: '24px' }}>
                             {createdUser ? (
                                 <div style={{ textAlign: 'center' }} className="animate-fade-in">
-                                    <div style={{ width: '64px', height: '64px', background: 'rgba(74, 222, 128, 0.1)', color: '#4ade80', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                                    <div style={{ width: '64px', height: '64px', background: 'var(--success-soft)', color: 'var(--success)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                                         <CheckCircle size={32} />
                                     </div>
                                     <h4 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>创建成功</h4>
@@ -341,7 +341,7 @@ export default function UserManagementView() {
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>初始密码</span>
-                                            <span style={{ fontSize: '0.7rem', color: '#f87171', background: 'rgba(248, 113, 113, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>请务必保存</span>
+                                            <span style={{ fontSize: '0.7rem', color: 'var(--danger)', background: 'var(--danger-soft)', padding: '2px 6px', borderRadius: '4px' }}>请务必保存</span>
                                         </div>
                                         <div style={{
                                             background: 'var(--bg-input)',
@@ -365,9 +365,9 @@ export default function UserManagementView() {
                                         style={{
                                             width: '100%',
                                             justifyContent: 'center',
-                                            background: copied ? 'rgba(74, 222, 128, 0.1)' : 'var(--accent-primary)',
-                                            color: copied ? '#4ade80' : 'white',
-                                            border: copied ? '1px solid #4ade80' : 'none',
+                                            background: copied ? 'var(--success-soft)' : 'var(--accent-primary)',
+                                            color: copied ? 'var(--success)' : 'white',
+                                            border: copied ? '1px solid var(--success)' : 'none',
                                             height: '42px'
                                         }}
                                     >
@@ -433,8 +433,8 @@ export default function UserManagementView() {
                                             marginTop: '8px',
                                             width: '100%',
                                             justifyContent: 'center',
-                                            background: 'var(--accent-primary)',
-                                            color: 'white',
+                                            background: 'var(--accent-solid)',
+                                            color: 'var(--text-on-accent)',
                                             border: 'none',
                                             height: '42px'
                                         }}

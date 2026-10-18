@@ -20,6 +20,8 @@ from app.api.spiders.router import router as spiders_router
 from app.api.users.router import router as users_router
 from app.api.dashboard.router import router as dashboard_router
 from app.api.admin.router import router as admin_router
+from app.api.dataview.router import router as dataview_router
+from app.api.reports.router import router as reports_router
 from app.core.redis import redis_manager
 from app.core.scheduler import start_leader_election, stop_leader_election
 from config import settings
@@ -127,6 +129,8 @@ app.include_router(tasks_router, prefix="/api/tasks", tags=["任务管理"])
 app.include_router(users_router, prefix="/api/users", tags=["用户"])
 app.include_router(dashboard_router, prefix="/api/dashboard", tags=["大盘"])
 app.include_router(admin_router, prefix="/api/admin", tags=["管理员"])
+app.include_router(dataview_router, prefix="/api/dataview", tags=["数据查看"])
+app.include_router(reports_router, prefix="/api/reports", tags=["统计报表"])
 
 # 独立注册 WebSocket 路由，避免 Router 前缀干扰
 from app.api.tasks.websocket import websocket_task_logs, websocket_task_data

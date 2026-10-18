@@ -104,8 +104,8 @@
 }
 
 .tm-shortcut-btn:hover {
-    background: rgba(99, 102, 241, 0.12);
-    border-color: rgba(99, 102, 241, 0.3);
+    background: var(--violet-soft);
+    border-color: var(--violet-border);
     color: var(--accent-primary);
 }
 
@@ -153,7 +153,7 @@
 }
 
 .tm-btn-clear:hover {
-    color: #f87171;
+    color: var(--danger);
 }
 
 .tm-content {
@@ -169,7 +169,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--overlay-bg);
     backdrop-filter: blur(4px);
     z-index: 1000;
 }
@@ -185,7 +185,7 @@
     z-index: 1001;
     display: flex;
     flex-direction: column;
-    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+    box-shadow: -10px 0 30px var(--overlay-bg);
 }
 
 .tm-log-drawer .log-terminal-wrapper {
@@ -232,11 +232,11 @@
 }
 
 .tm-table tr.active-row {
-    background: rgba(59, 130, 246, 0.08);
+    background: var(--accent-soft);
 }
 
 .tm-table tr.active-row td {
-    border-bottom-color: rgba(59, 130, 246, 0.2);
+    border-bottom-color: var(--accent-border);
 }
 
 .tm-id {
@@ -285,22 +285,22 @@
 }
 
 .tm-badge.success {
-    background: rgba(16, 185, 129, 0.1);
-    color: #4ade80;
+    background: var(--success-soft);
+    color: var(--success);
 }
 
 .tm-badge.error {
-    background: rgba(239, 68, 68, 0.1);
-    color: #f87171;
+    background: var(--danger-soft);
+    color: var(--danger);
 }
 
 .tm-badge.running {
-    background: rgba(59, 130, 246, 0.1);
-    color: #60a5fa;
+    background: var(--accent-soft);
+    color: var(--info);
 }
 
 .tm-badge.pending {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--surface-1);
     color: var(--text-muted);
 }
 
@@ -333,14 +333,14 @@
 }
 
 .tm-action-btn.stop {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: var(--danger-soft);
+    color: var(--danger-strong);
+    border: 1px solid var(--danger-border);
 }
 
 .tm-action-btn.stop:hover:not(:disabled) {
-    background: #ef4444;
-    color: #fff;
+    background: var(--danger-strong);
+    color: var(--text-on-accent);
 }
 
 .tm-action-btn.delete {
@@ -350,33 +350,33 @@
 }
 
 .tm-action-btn.delete:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: #f87171;
-    border-color: rgba(239, 68, 68, 0.3);
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-color: var(--danger-border);
 }
 
 .tm-action-btn.log {
-    background: rgba(59, 130, 246, 0.08);
-    color: #60a5fa;
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: var(--accent-soft);
+    color: var(--info);
+    border: 1px solid var(--accent-border);
 }
 
 .tm-action-btn.log:hover {
-    background: rgba(59, 130, 246, 0.2);
-    color: #93bbfd;
-    border-color: rgba(59, 130, 246, 0.4);
+    background: var(--accent-border);
+    color: var(--info);
+    border-color: var(--accent-border);
 }
 
 .tm-action-btn.data {
-    background: rgba(168, 85, 247, 0.08);
-    color: #a855f7;
-    border: 1px solid rgba(168, 85, 247, 0.2);
+    background: var(--violet-soft);
+    color: var(--violet-strong);
+    border: 1px solid var(--violet-border);
 }
 
 .tm-action-btn.data:hover {
-    background: rgba(168, 85, 247, 0.2);
-    color: #d8b4fe;
-    border-color: rgba(168, 85, 247, 0.4);
+    background: var(--violet-border);
+    color: var(--violet);
+    border-color: var(--violet-border);
 }
 
 .tm-empty {

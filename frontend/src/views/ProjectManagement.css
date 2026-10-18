@@ -157,9 +157,9 @@
 }
 
 .pm-tag-blue {
-    background: rgba(59, 130, 246, 0.1);
-    color: #60a5fa;
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: var(--accent-soft);
+    color: var(--info);
+    border: 1px solid var(--accent-border);
 }
 
 .pm-tag-gray {
@@ -199,12 +199,12 @@
 }
 
 .pm-btn-icon.edit:hover {
-    color: #60a5fa;
+    color: var(--info);
 }
 
 .pm-btn-icon.del:hover {
-    color: #f87171;
-    background: rgba(248, 113, 113, 0.1);
+    color: var(--danger);
+    background: var(--danger-soft);
 }
 
 /* 按钮通用 */
@@ -228,7 +228,7 @@
 }
 
 .pm-btn-primary {
-    background: var(--accent-primary);
+    background: var(--accent-solid);
     color: white;
 }
 
@@ -237,12 +237,12 @@
 }
 
 .pm-btn-danger {
-    background: #ef4444;
+    background: var(--danger-strong);
     color: white;
 }
 
 .pm-btn-danger:not(:disabled):hover {
-    background: #dc2626;
+    background: var(--danger-strong);
 }
 
 .pm-btn-ghost {
@@ -262,7 +262,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--overlay-bg);
     z-index: 100;
     backdrop-filter: blur(2px);
     animation: fadeIn 0.2s ease-out;
@@ -278,7 +278,7 @@
     z-index: 101;
     display: flex;
     flex-direction: column;
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
+    box-shadow: -4px 0 24px var(--shadow-color);
     animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -375,7 +375,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--overlay-bg);
     backdrop-filter: blur(4px);
     z-index: 200;
     display: flex;
@@ -389,7 +389,7 @@
     background: var(--bg-card);
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 32px var(--shadow-color);
     animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex;
     flex-direction: column;
@@ -444,7 +444,7 @@
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 12px var(--shadow-color);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -454,11 +454,11 @@
 }
 
 .pm-toast.success {
-    border-left: 4px solid #4ade80;
+    border-left: 4px solid var(--success);
 }
 
 .pm-toast.error {
-    border-left: 4px solid #f87171;
+    border-left: 4px solid var(--danger);
 }
 
 .spin {

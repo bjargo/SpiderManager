@@ -42,6 +42,7 @@ RUN {% if buildkit_enabled %}--mount=type=cache,target=/root/.cache/pip {% endif
 
 # ── 业务代码 ──
 COPY . /app/
+RUN if python -m pip show spidermanager-sdk >/dev/null 2>&1; then rm -f /app/spidermanager_sdk.py; fi
 RUN find . -maxdepth 2 -name "*.py"
 
 # 以 root 运行，undetected_chromedriver 在容器内需配合 --no-sandbox

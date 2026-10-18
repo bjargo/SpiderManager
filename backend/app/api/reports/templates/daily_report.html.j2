@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ report.report_date }} 任务日报</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',Helvetica,Arial,sans-serif;color:#1f2329;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="820" cellpadding="0" cellspacing="0" style="max-width:820px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+
+          <!-- 头部 -->
+          <tr>
+            <td style="background:#1f2d3d;padding:22px 28px;">
+              <div style="font-size:19px;font-weight:600;color:#ffffff;">SpiderManage 每日任务日报</div>
+              <div style="font-size:13px;color:#9fb0c3;margin-top:6px;">
+                统计日期：{{ report.report_date }}（{{ fmt_dt(report.window_start) }} ~ {{ fmt_dt(report.window_end) }}）
+              </div>
+            </td>
+          </tr>
+
+          <!-- 总览指标 -->
+          <tr>
+            <td style="padding:22px 28px 6px 28px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td width="25%" style="padding:4px;">
+                    <div style="border:1px solid #e5e6eb;border-radius:8px;padding:12px;text-align:center;">
+                      <div style="font-size:12px;color:#86909c;">任务总数</div>
+                      <div style="font-size:22px;font-weight:700;color:#1f2329;margin-top:4px;">{{ report.total_tasks }}</div>
+                    </div>
+                  </td>
+                  <td width="25%" style="padding:4px;">
+                    <div style="border:1px solid #e5e6eb;border-radius:8px;padding:12px;text-align:center;">
+                      <div style="font-size:12px;color:#86909c;">成功</div>
+                      <div style="font-size:22px;font-weight:700;color:#00a870;margin-top:4px;">{{ report.success_count }}</div>
+                    </div>
+                  </td>
+                  <td width="25%" style="padding:4px;">
+                    <div style="border:1px solid #e5e6eb;border-radius:8px;padding:12px;text-align:center;">
+                      <div style="font-size:12px;color:#86909c;">失败</div>
+                      <div style="font-size:22px;font-weight:700;color:{{ '#f53f3f' if report.failed_count else '#1f2329' }};margin-top:4px;">{{ report.failed_count }}</div>
+                    </div>
+                  </td>
+                  <td width="25%" style="padding:4px;">
+                    <div style="border:1px solid #e5e6eb;border-radius:8px;padding:12px;text-align:center;">
+                      <div style="font-size:12px;color:#86909c;">采集数据量</div>
+                      <div style="font-size:22px;font-weight:700;color:#165dff;margin-top:4px;">{{ fmt_int(report.total_records) }}</div>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- 次级指标 -->
+          <tr>
+            <td style="padding:8px 32px 0 32px;">
+              <div style="font-size:13px;color:#4e5969;line-height:1.9;">
+                成功率：<b>{{ '%.1f'|format(report.success_rate * 100) }}%</b>
+                &nbsp;·&nbsp; 平均耗时：<b>{{ fmt_duration(report.avg_duration_seconds) }}</b>
+                &nbsp;·&nbsp; 已取消：<b>{{ report.cancelled_count }}</b>
+                &nbsp;·&nbsp; 未完成：<b>{{ report.pending_count }}</b>
+              </div>
+            </td>
+          </tr>
+
+          {% if report.records_partial %}
+          <tr>
+            <td style="padding:14px 32px 0 32px;">
+              <div style="background:#fff7e8;border:1px solid #ffcf8b;border-radius:6px;padding:10px 12px;font-size:13px;color:#7d4e00;">
+                ⚠️ 数据量统计不完整，以下数据表在统计时超时或异常被跳过：{{ report.records_skipped_tables | join('、') }}
+              </div>
+            </td>
+          </tr>
+          {% endif %}
+
+          <!-- 成功爬虫采集汇总 -->
+          <tr>
+            <td style="padding:24px 28px 0 28px;">
+              <div style="font-size:15px;font-weight:600;color:#1f2329;border-left:3px solid #00a870;padding-left:9px;">
+                运行成功（{{ report.success_spiders | length }} 个爬虫 / {{ report.success_count }} 次运行）
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 28px 0 28px;">
+              {% if report.success_spiders %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+                <thead>
+                  <tr style="background:#f7f8fa;color:#4e5969;">
+                    <th align="left" style="padding:9px 10px;border-bottom:1px solid #e5e6eb;font-weight:600;">爬虫名称</th>
+                    <th align="right" style="padding:9px 10px;border-bottom:1px solid #e5e6eb;font-weight:600;width:80px;">运行次数</th>
+                    <th align="right" style="padding:9px 10px;border-bottom:1px solid #e5e6eb;font-weight:600;width:110px;">采集数据量</th>
+                    <th align="right" style="padding:9px 10px;border-bottom:1px solid #e5e6eb;font-weight:600;width:110px;">累计耗时</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for spider in report.success_spiders %}
+                  <tr>
+                    <td style="padding:9px 10px;border-bottom:1px solid #f2f3f5;color:#1f2329;">{{ spider.spider_name }}</td>
+                    <td align="right" style="padding:9px 10px;border-bottom:1px solid #f2f3f5;color:#4e5969;">{{ spider.runs }}</td>
+                    <td align="right" style="padding:9px 10px;border-bottom:1px solid #f2f3f5;color:#165dff;font-weight:600;">{{ fmt_int(spider.records) }}</td>
+                    <td align="right" style="padding:9px 10px;border-bottom:1px solid #f2f3f5;color:#4e5969;">{{ fmt_duration(spider.duration_seconds) }}</td>
+                  </tr>
+                  {% endfor %}
+                  <tr>
+                    <td style="padding:9px 10px;font-weight:600;color:#1f2329;">合计</td>
+                    <td align="right" style="padding:9px 10px;font-weight:600;color:#1f2329;">{{ report.success_count }}</td>
+                    <td align="right" style="padding:9px 10px;font-weight:700;color:#165dff;">{{ fmt_int(report.total_records) }}</td>
+                    <td align="right" style="padding:9px 10px;color:#86909c;">-</td>
+                  </tr>
+                </tbody>
+              </table>
+              {% else %}
+              <div style="font-size:13px;color:#86909c;">当日没有运行成功的爬虫。</div>
+              {% endif %}
+            </td>
+          </tr>
+
+          <!-- 失败任务 -->
+          <tr>
+            <td style="padding:26px 28px 0 28px;">
+              <div style="font-size:15px;font-weight:600;color:#1f2329;border-left:3px solid #f53f3f;padding-left:9px;">
+                运行失败（{{ report.failed_count }}）
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 28px 0 28px;">
+              {% if report.failed_tasks %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+                <thead>
+                  <tr style="background:#f7f8fa;color:#4e5969;">
+                    <th align="left" style="padding:9px 10px;border-bottom:1px solid #e5e6eb;font-weight:600;">爬虫名称</th>
+                    <th align="left" style="padding:9px 10px;border-bottom:1px solid #e5e6eb;font-weight:600;width:170px;">任务 ID</th>
+                    <th align="left" style="padding:9px 10px;border-bottom:1px solid #e5e6eb;font-weight:600;width:90px;">状态</th>
+                    <th align="right" style="padding:9px 10px;border-bottom:1px solid #e5e6eb;font-weight:600;width:90px;">耗时</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for task in report.failed_tasks %}
+                  <tr>
+                    <td style="padding:9px 10px;border-bottom:1px solid #f2f3f5;color:#1f2329;vertical-align:top;">{{ task.spider_name }}</td>
+                    <td style="padding:9px 10px;border-bottom:1px solid #f2f3f5;color:#4e5969;font-family:Consolas,Monaco,monospace;font-size:12px;vertical-align:top;">{{ task.task_id }}</td>
+                    <td style="padding:9px 10px;border-bottom:1px solid #f2f3f5;color:#f53f3f;vertical-align:top;">{{ task.status }}</td>
+                    <td align="right" style="padding:9px 10px;border-bottom:1px solid #f2f3f5;color:#4e5969;vertical-align:top;">{{ fmt_duration(task.duration_seconds) }}</td>
+                  </tr>
+                  <tr>
+                    <td colspan="4" style="padding:0 10px 10px 10px;border-bottom:1px solid #f2f3f5;">
+                      <div style="background:#fff1f0;border-radius:5px;padding:8px 10px;font-size:12px;color:#a8071a;white-space:pre-wrap;word-break:break-all;font-family:Consolas,Monaco,monospace;">{{ task.error_detail or '（无异常信息）' }}</div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <div style="font-size:13px;color:#86909c;">当日没有失败任务 🎉</div>
+              {% endif %}
+            </td>
+          </tr>
+
+          {% if report.cancelled_tasks or report.pending_tasks %}
+          <!-- 取消 / 未完成 -->
+          <tr>
+            <td style="padding:26px 28px 0 28px;">
+              <div style="font-size:15px;font-weight:600;color:#1f2329;border-left:3px solid #86909c;padding-left:9px;">
+                其它状态
+              </div>
+              <div style="font-size:13px;color:#4e5969;line-height:1.9;margin-top:10px;">
+                {% if report.cancelled_tasks %}
+                <div><b>已取消（{{ report.cancelled_count }}）：</b>
+                  {% for task in report.cancelled_tasks %}{{ task.spider_name }}<span style="color:#86909c;">({{ task.task_id }})</span>{% if not loop.last %}、{% endif %}{% endfor %}
+                </div>
+                {% endif %}
+                {% if report.pending_tasks %}
+                <div><b>未完成（{{ report.pending_count }}）：</b>
+                  {% for task in report.pending_tasks %}{{ task.spider_name }}<span style="color:#86909c;">({{ task.status }})</span>{% if not loop.last %}、{% endif %}{% endfor %}
+                </div>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endif %}
+
+          <!-- 脚注 -->
+          <tr>
+            <td style="padding:26px 28px 28px 28px;">
+              <div style="border-top:1px solid #f2f3f5;padding-top:14px;font-size:12px;color:#86909c;line-height:1.9;">
+                <div>· 统计口径：以任务创建时间归属日期；失败包含 failed / timeout / error；成功率 = 成功 ÷（成功 + 失败）。</div>
+                <div>· {{ report.records_scope_note }}。</div>
+                <div>· 报告生成时间：{{ fmt_dt(report.generated_at) }} · 由 SpiderManage 自动发送，请勿直接回复。</div>
+              </div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -10,6 +10,20 @@ from jinja2 import Template
 
 logger = logging.getLogger(__name__)
 
+
+def normalize_entrypoint(language: str, entrypoint: str) -> str:
+    """Ensure a bare Python script path is invoked through the Python interpreter."""
+    normalized_language = language.lower()
+    command = entrypoint.strip()
+    if (
+        normalized_language.startswith(("python", "py"))
+        and command.endswith(".py")
+        and not any(char.isspace() for char in command)
+    ):
+        return f"python {command}"
+    return entrypoint
+
+
 class BaseRunner(ABC):
     @abstractmethod
     def get_dockerfile_content(self, context_vars: Dict[str, Any]) -> str:

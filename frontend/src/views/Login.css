@@ -29,7 +29,7 @@
 .spot-1 {
     width: 600px;
     height: 600px;
-    background-color: var(--accent-primary);
+    background-color: var(--accent-solid);
     top: -10%;
     left: -10%;
 }
@@ -37,7 +37,7 @@
 .spot-2 {
     width: 500px;
     height: 500px;
-    background-color: #8b5cf6;
+    background-color: var(--violet-strong);
     bottom: -10%;
     right: -10%;
     animation-delay: -10s;
@@ -59,7 +59,7 @@
     padding: 3rem 2.5rem;
     position: relative;
     z-index: 1;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 25px 50px -12px var(--overlay-bg);
     animation: fadeIn 0.6s ease-out;
 }
 
@@ -86,11 +86,11 @@
     justify-content: center;
     width: 64px;
     height: 64px;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.2) 100%);
+    background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent-border) 100%);
     border-radius: 16px;
     margin-bottom: 1rem;
     color: var(--accent-primary);
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    border: 1px solid var(--accent-border);
 }
 
 .login-header h2 {
@@ -161,15 +161,15 @@
     font-size: 0.875rem;
     text-align: center;
     padding: 0.5rem;
-    background: rgba(239, 68, 68, 0.1);
+    background: var(--danger-soft);
     border-radius: 6px;
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    border: 1px solid var(--danger-border);
 }
 
 .login-submit-btn {
     width: 100%;
     padding: 0.875rem;
-    background: var(--accent-primary);
+    background: var(--accent-solid);
     color: white;
     border: none;
     border-radius: 8px;
@@ -209,7 +209,7 @@
     height: 20px;
     margin-left: -10px;
     margin-top: -10px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
+    border: 3px solid var(--border-strong);
     border-top-color: white;
     border-radius: 50%;
     animation: spin 1s linear infinite;

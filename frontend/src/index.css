@@ -15,12 +15,15 @@
   --bg-sidebar: #1a1d24;
 
   --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-secondary: #a8b4c4;
+  --text-muted: #8b98ab;
 
   --accent-primary: #3b82f6;
   --accent-hover: #2563eb;
   --accent-glow: rgba(59, 130, 246, 0.4);
+  /* 实心填充（按钮等承载白色文字）用更深的蓝，保证白字达到 AA 对比度 */
+  --accent-solid: #2563eb;
+  --accent-solid-hover: #1d4ed8;
 
   --status-online: #10b981;
   --status-offline: #ef4444;
@@ -39,6 +42,74 @@
   --overlay-bg: rgba(0, 0, 0, 0.65);
   --glass-bg: rgba(26, 29, 36, 0.7);
 
+  /* ── 语义状态色（亮/暗各自覆盖，保证文字对比度）── */
+  --success: #4ade80;
+  --success-strong: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.12);
+  --success-border: rgba(16, 185, 129, 0.30);
+
+  --danger: #f87171;
+  --danger-strong: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.12);
+  --danger-border: rgba(239, 68, 68, 0.30);
+
+  --warning: #fbbf24;
+  --warning-strong: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.12);
+  --warning-border: rgba(245, 158, 11, 0.30);
+
+  --info: #60a5fa;
+  --info-strong: #3b82f6;
+  --info-soft: rgba(59, 130, 246, 0.12);
+  --info-border: rgba(59, 130, 246, 0.30);
+
+  --violet: #a78bfa;
+  --violet-strong: #8b5cf6;
+  --violet-soft: rgba(139, 92, 246, 0.12);
+  --violet-border: rgba(139, 92, 246, 0.30);
+
+  --neutral: #94a3b8;
+  --neutral-strong: #64748b;
+  --neutral-soft: rgba(148, 163, 184, 0.12);
+  --neutral-border: rgba(148, 163, 184, 0.30);
+
+  /* 强调色软背景 / 边框 */
+  --accent-soft: rgba(59, 130, 246, 0.10);
+  --accent-soft-strong: rgba(59, 130, 246, 0.22);
+  --accent-border: rgba(59, 130, 246, 0.32);
+
+  /* 彩色实心背景上的文字 */
+  --text-on-accent: #ffffff;
+  --text-on-danger: #ffffff;
+  /* 开关旋钮等物理感控件 */
+  --switch-knob: #ffffff;
+
+  /* 主题感知的半透明表面（替代写死的 rgba(255,255,255,.05) / rgba(0,0,0,.25)）*/
+  --surface-1: rgba(255, 255, 255, 0.04);
+  --surface-2: rgba(255, 255, 255, 0.08);
+  --surface-sunken: rgba(0, 0, 0, 0.25);
+  --overlay-strong: rgba(0, 0, 0, 0.7);
+
+  /* 表格 */
+  --table-head-bg: rgba(255, 255, 255, 0.03);
+  --row-hover-bg: rgba(255, 255, 255, 0.04);
+
+  /* 终端 / 代码区（浅色模式下切换为浅底深字，避免深色代码区与浅色页面混搭）*/
+  --code-bg: #0f1115;
+  --code-text: #4ade80;
+  --code-text-muted: #64748b;
+  --code-border: rgba(255, 255, 255, 0.08);
+
+  /* 图表（ECharts 等按主题取色）*/
+  --chart-grid: rgba(255, 255, 255, 0.08);
+  --chart-axis: #64748b;
+  --chart-label: #94a3b8;
+  --chart-tooltip-bg: #1a1d24;
+  --chart-tooltip-border: rgba(255, 255, 255, 0.12);
+
+  /* 焦点环 */
+  --focus-ring: rgba(59, 130, 246, 0.35);
+
   --font-base: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
@@ -55,15 +126,22 @@
   --bg-input: #f8fafc;
   --bg-sidebar: #ffffff;
 
+  /* 状态指示色：浅色模式下取更深色值，避免浅色文字在白底上看不清 */
+  --status-online: #15803d;
+  --status-offline: #b91c1c;
+  --status-busy: #b45309;
+
   /* 文字颜色 - 更好的对比度 */
   --text-primary: #0f172a;
   --text-secondary: #334155;
-  --text-muted: #64748b;
+  --text-muted: #475569;
 
   /* 强调色 */
   --accent-primary: #2563eb;
   --accent-hover: #1d4ed8;
   --accent-glow: rgba(37, 99, 235, 0.15);
+  --accent-solid: #2563eb;
+  --accent-solid-hover: #1d4ed8;
 
   /* 边框 - 更明显的边界 */
   --border-color: #e2e8f0;
@@ -79,6 +157,66 @@
 
   --overlay-bg: rgba(15, 23, 42, 0.6);
   --glass-bg: rgba(255, 255, 255, 0.95);
+
+  /* ── 语义状态色（浅色模式取更深色值，避免浅色文字在浅底上看不清）── */
+  --success: #15803d;
+  --success-strong: #16a34a;
+  --success-soft: rgba(22, 163, 74, 0.10);
+  --success-border: rgba(22, 163, 74, 0.28);
+
+  --danger: #b91c1c;
+  --danger-strong: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.08);
+  --danger-border: rgba(220, 38, 38, 0.24);
+
+  --warning: #b45309;
+  --warning-strong: #d97706;
+  --warning-soft: rgba(217, 119, 6, 0.10);
+  --warning-border: rgba(217, 119, 6, 0.28);
+
+  --info: #1d4ed8;
+  --info-strong: #2563eb;
+  --info-soft: rgba(37, 99, 235, 0.08);
+  --info-border: rgba(37, 99, 235, 0.24);
+
+  --violet: #6d28d9;
+  --violet-strong: #7c3aed;
+  --violet-soft: rgba(124, 58, 237, 0.08);
+  --violet-border: rgba(124, 58, 237, 0.24);
+
+  --neutral: #475569;
+  --neutral-strong: #475569;
+  --neutral-soft: rgba(71, 85, 105, 0.08);
+  --neutral-border: rgba(71, 85, 105, 0.24);
+
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --accent-soft-strong: rgba(37, 99, 235, 0.16);
+  --accent-border: rgba(37, 99, 235, 0.28);
+
+  --text-on-accent: #ffffff;
+  --text-on-danger: #ffffff;
+  --switch-knob: #ffffff;
+
+  --surface-1: rgba(15, 23, 42, 0.03);
+  --surface-2: rgba(15, 23, 42, 0.07);
+  --surface-sunken: rgba(15, 23, 42, 0.05);
+  --overlay-strong: rgba(15, 23, 42, 0.55);
+
+  --table-head-bg: #f1f5f9;
+  --row-hover-bg: #f8fafc;
+
+  --code-bg: #ffffff;
+  --code-text: #047857;
+  --code-text-muted: #64748b;
+  --code-border: #e2e8f0;
+
+  --chart-grid: rgba(15, 23, 42, 0.08);
+  --chart-axis: #64748b;
+  --chart-label: #475569;
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-border: #e2e8f0;
+
+  --focus-ring: rgba(37, 99, 235, 0.25);
 }
 
 html, body {
@@ -453,43 +591,5 @@ td {
   border: 1px solid var(--border-color);
 }
 
-
-
-/* ============================================
-   强制深色组件 (在亮色模式下依然保持深色风格)
-   ============================================ */
-:root.light-theme .log-terminal-wrapper,
-:root.light-theme .tl-terminal,
-:root.light-theme .ce-container {
-  --bg-primary: #0f1115;
-  --bg-secondary: #1a1d24;
-  --bg-tertiary: #232730;
-  --bg-elevated: #2c313c;
-  --bg-surface: #1a1b2e;
-  --bg-input: rgba(0, 0, 0, 0.25);
-  --bg-hover: rgba(255, 255, 255, 0.05);
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.15);
-}
-
-/* 终端滚动条单独在非暗黑下适配一下，防止影响全局 */
-:root.light-theme .log-terminal-wrapper ::-webkit-scrollbar-track,
-:root.light-theme .tl-terminal ::-webkit-scrollbar-track,
-:root.light-theme .ce-container ::-webkit-scrollbar-track {
-  background: var(--bg-primary);
-}
-
-:root.light-theme .log-terminal-wrapper ::-webkit-scrollbar-thumb,
-:root.light-theme .tl-terminal ::-webkit-scrollbar-thumb,
-:root.light-theme .ce-container ::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
-}
-
-:root.light-theme .log-terminal-wrapper ::-webkit-scrollbar-thumb:hover,
-:root.light-theme .tl-terminal ::-webkit-scrollbar-thumb:hover,
-:root.light-theme .ce-container ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
-}
+/* 说明：终端与代码编辑器不再"强制深色"，统一由 --code-* 与常规语义令牌驱动，
+   避免浅色页面里嵌一块深色区域导致风格混用与文字对比度不足。*/

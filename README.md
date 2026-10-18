@@ -300,6 +300,21 @@ async with async_session_maker() as session:
 
 ---
 
+### 📧 每日任务统计日报
+
+平台每日自动汇总前一天的任务运行状态，并通过邮件推送到指定收件人：
+
+- **运行概览**：任务总数、成功/失败/取消/未完成数量、成功率、平均耗时
+- **成功爬虫**：按爬虫聚合「运行次数 + 采集数据量 + 累计耗时」，一眼看清哪些爬虫跑成功、采了多少条
+- **失败详情**：失败爬虫名称、任务 ID、状态与错误摘要（截断保护，避免超长日志撑爆邮件）
+- **集群安全**：Job 注册在仅 Leader 运行的 APScheduler 中，多 Master 部署下每日只发一封
+- **页面可配**：在「系统设置」页面即可修改 SMTP 通道、发送时刻、收件人，保存后即时生效（数据库优先于环境变量）
+- **零侵入**：未配置 `SMTP_HOST` 或关闭开关时完全静默，不影响任何现有功能
+
+详见 [配置说明 → 每日任务统计日报](#-每日任务统计日报)。
+
+---
+
 ### 💓 节点心跳与监控
 
 Worker 节点定期向 Redis 上报心跳，包含系统资源使用情况：
@@ -546,6 +561,99 @@ docker compose up -d --scale worker=3
 | `DOCKER_CPU_QUOTA` | 爬虫容器 CPU 配额 | `100000` (1核) |
 | `LOG_FLUSH_SIZE` | 日志缓冲行数 | `20` |
 | `REDUCER_BATCH_SIZE` | 数据批量入库条数 | `100` |
+| `SMTP_HOST` | SMTP 服务器地址，留空则不启用邮件能力 | *（空）* |
+| `SMTP_PORT` | SMTP 端口（465 SSL / 587 STARTTLS） | `465` |
+| `SMTP_USER` / `SMTP_PASSWORD` | 发信账号与授权码（非登录密码） | *（空）* |
+| `SMTP_FROM` | 发件人地址，留空回落到 `SMTP_USER` | *（空）* |
+| `DAILY_REPORT_ENABLED` | 是否启用每日任务统计日报 | `false` |
+| `DAILY_REPORT_HOUR` / `DAILY_REPORT_MINUTE` | 日报发送时刻（应用时区） | `8` / `0` |
+| `DAILY_REPORT_RECIPIENTS` | 日报收件人，多个用英文逗号分隔 | *（空）* |
+
+### 📧 每日任务统计日报
+
+平台每天自动汇总前一日任务运行状态（成功/失败/取消/未完成、各爬虫采集数据量），并以 HTML 邮件发送到指定邮箱。
+
+**统计口径**：
+
+| 项目 | 口径 |
+|------|------|
+| 统计窗口 | 报告日 00:00:00 ~ 次日 00:00:00（应用时区 `TIMEZONE`） |
+| 归属依据 | `spider_tasks.created_at` 落在窗口内（与大盘 Dashboard 一致） |
+| 失败 | `failed` / `timeout` / `error`；`cancelled` 单列，不计入失败 |
+| 成功率 | 成功 ÷（成功 + 失败），取消与未完成不参与分母 |
+| 采集数据量 | 爬虫数据表中按 `_task_id` 已落库的记录数（Redis 缓冲中未落库部分不计入） |
+
+**启用方式一：前端设置页面（推荐）**
+
+以 admin 登录后进入 **「系统设置」** 页（`/settings`），即可完成全部配置并即时生效，**无需重启服务**：
+
+| 区域 | 可配置项 |
+|------|----------|
+| 邮件通道（SMTP） | 服务器、端口与加密方式（SSL 465 / STARTTLS 587 / 不加密）、认证账号、授权码、发件人、超时与重试次数 |
+| 日报策略 | 启用开关、发送时刻（时/分）、收件人（多地址）、无任务日是否发送简报 |
+| 预览与手动补发 | 选择日期后「预览邮件」（浏览器查看真实排版）或「立即发送」 |
+
+页面顶部会实时展示配置来源、SMTP 通道是否就绪、本节点是否正在调度（Leader）、下次发送时间等状态；并提供「发送测试邮件」按钮快速验证通道。
+
+**启用方式二：环境变量**（适合首次部署时预置，或由运维统一管理）
+
+1. 登录邮箱后台开启 SMTP 服务并获取授权码（QQ 邮箱：设置 → 账户 → 开启 IMAP/SMTP 服务，短信验证后得到 16 位授权码）；
+2. 在 `docker-compose.yml` 同目录的 `.env` 中填写（避免明文入库）：
+
+> 🔒 `.env` 已被仓库根目录 `.gitignore` 的 `.env` 规则忽略，`git status` 不会显示、也不会同步到 GitHub。
+> 请勿把 SMTP 授权码写入 `docker-compose.yml` / `Dockerfile` / README 等受版本控制的文件；
+> `docker-compose.yml` 中使用 `${SMTP_PASSWORD:-}` 占位符，由 `.env` 在部署时注入为**运行时环境变量**（不会打入镜像层）。
+
+```bash
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=465
+SMTP_USE_SSL=true
+SMTP_USER=spiderbot@qq.com
+SMTP_PASSWORD=你的16位授权码
+SMTP_FROM=spiderbot@qq.com        # QQ 要求与认证账号一致，否则报 553/501
+DAILY_REPORT_RECIPIENTS=ops@company.com,lead@company.com
+DAILY_REPORT_ENABLED=true
+DAILY_REPORT_HOUR=8
+```
+
+3. 重启 Master（仅 Master 需要邮件出网能力，Worker 不参与发送）：
+
+```bash
+docker compose up -d master
+```
+
+**配置优先级**：设置页面保存的值（数据库 `report_settings` 表）**高于**环境变量。
+从未在页面保存过时完全沿用 `.env`，行为与旧版本一致；页面一旦保存，数据库即成为唯一事实源。
+授权码例外：数据库中的授权码为空时自动回落 `.env` 的 `SMTP_PASSWORD`，
+因此可以把口令只留在 `.env` 中、页面留空不修改（页面永不回显口令）。
+
+**接口**（均需 admin 权限）：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/reports/settings` | 读取生效配置与调度状态（口令不回显） |
+| POST | `/api/reports/settings` | 保存配置；`smtp_password` 留空表示保持原值；保存后立即对齐调度 |
+| POST | `/api/reports/settings/test-mail` | 使用当前配置发送测试邮件，可临时指定收件人 |
+| GET | `/api/reports/daily/preview?date=2026-03-05` | 预览日报统计数据（JSON），`date` 默认昨天 |
+| GET | `/api/reports/daily/preview-html?date=2026-03-05` | 在浏览器中查看与真实邮件一致的 HTML 效果 |
+| POST | `/api/reports/daily/send` | 立即发送（支持 `recipients` 临时收件人，便于联调与补发） |
+
+```bash
+# 联调：只发给自己的测试邮箱，不影响正式收件人
+curl -X POST http://localhost:8001/api/reports/daily/send \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"date":"2026-03-05","recipients":["me@company.com"]}'
+```
+
+**调度与可靠性**：
+- 日报 Job 注册在 APScheduler 中，而 APScheduler **仅由 Leader Master 运行**，因此集群部署下每日只会发出一封；
+- 配置存放于数据库，由 Leader 每 60 秒自动对齐调度（启用/停用/改点），页面保存后立即生效，**无需重启**；
+- SMTP 发送失败自动重试（指数退避），失败只记录 `error.log`，不影响 `daily_image_prune` 等其它定时任务；
+- 未配置 `SMTP_HOST`（且页面未保存）或未启用日报时功能完全静默，不改变现有行为；
+- 网络要求：**仅需 Master 能出站访问 `SMTP_HOST:SMTP_PORT`**，无需开放任何入站端口；内网自建 SMTP 中继则完全不涉及公网。
+
+> 自测连通性：`docker exec spidermanage_master python -c "import socket;s=socket.create_connection(('smtp.qq.com',465),5);s.close();print('OK')"`
 
 ### 异机部署
 
@@ -644,6 +752,7 @@ SpiderManage/
 | 任务管理 | `/api/tasks` | 任务创建、执行、状态查询 |
 | 节点管理 | `/api/nodes` | Worker 节点状态监控 |
 | 日志查询 | `/api/logs` | 任务日志查询 |
+| 数据查看 | `/api/dataview` | 采集数据表浏览（只读 + 查询限制） |
 | 数据大盘 | `/api/dashboard` | 统计数据聚合 |
 | 管理员 | `/api/admin` | 系统管理功能 |
 
@@ -686,6 +795,27 @@ from spidermanager_sdk import send_data
 
 send_data("products", [{"name": "商品A", "price": 99.9}])
 ```
+
+**数据查看（只读 + 查询限制）**：
+
+| 端点 | 说明 |
+|------|------|
+| `GET /api/dataview/tables` | 数据表清单与采集概况（记录数估算、占用空间、任务数、最近采集时间） |
+| `GET /api/dataview/tables/{table_name}` | 单表采集概况（估算记录数、字段预览、最近任务、索引状态） |
+| `GET /api/dataview/tables/{table_name}/rows` | 游标分页浏览数据（`limit` / `cursor` / `task_id` / `order`） |
+
+为避免慢查询拖累爬虫数据库，该模块的查询链路叠加了多层防护：
+
+| 防护 | 说明 |
+|------|------|
+| 表白名单 | 表名必须通过标识符校验且真实存在于 `information_schema`，拒绝任意 SQL |
+| 只读事务 | `SET TRANSACTION READ ONLY`，从数据库层面杜绝写操作 |
+| 语句超时 | `SET LOCAL statement_timeout = 3000`，慢查询由 PostgreSQL 主动取消（接口返回 504） |
+| 行数上限 | 单次最多返回 100 行（默认 20），服务层再次收敛，防止拉取整表 |
+| 游标分页 | 仅支持 `cursor`（上一页最后的 `_id`），不接受 OFFSET，避免深翻页全表扫描 |
+| 并发闸门 | 进程内信号量限制同时进行的浏览查询数量（默认 4），闸门满时快速失败 |
+| 估算优先 | 记录数取自 `pg_class` / `pg_stat_user_tables` 统计信息，避免大表 `COUNT(*)` |
+| 元数据缓存 | 表清单与统计信息 30 秒缓存，降低系统表查询频率 |
 
 **创建定时任务**：
 ```bash
