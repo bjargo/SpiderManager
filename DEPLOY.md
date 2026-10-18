@@ -29,37 +29,141 @@ MINIO_CONSOLE_PORT=4203
 
 ---
 
-## 二、部署步骤
+## 二、完整部署流程（从 GitHub 拉取源码开始）
+
+> 仓库地址：`https://github.com/bjargo/SpiderManager.git`（分支 `main`）
+> 私有仓库请使用 `https://<用户名>:<PAT>@github.com/bjargo/SpiderManager.git` 或配置 SSH Deploy Key。
+
+### 步骤 0：服务器前置检查
 
 ```bash
-# 1. 上传代码并进入目录
-cd /opt/spidermanage
+uname -a && cat /etc/os-release | head -3          # 需 Linux（DooD 依赖 docker.sock）
+docker version --format '{{.Server.Version}}'      # 需 Docker 20.10+
+docker compose version                             # 需 Compose v2（docker compose，非 docker-compose）
+git --version
+ss -lntp | grep -E ':(4200|4201|4203|5432)\b' || echo "端口空闲"   # 应无输出
+df -h /opt                                          # 预留 ≥10G
+```
 
-# 2. 准备生产变量（SMTP 授权码、端口等），该文件已被 .gitignore 忽略
+### 步骤 1：拉取源码
+
+```bash
+sudo mkdir -p /opt/spidermanage && sudo chown "$USER" /opt/spidermanage
+cd /opt/spidermanage
+git clone https://github.com/bjargo/SpiderManager.git .
+git log --oneline -1        # 确认拉到最新提交
+```
+
+### 步骤 2：写入生产变量 `.env`（不随 Git 下发，务必手动创建）
+
+```bash
+cd /opt/spidermanage
 cat > .env <<'EOF'
+# ── 邮件通道（163 邮箱，用于每日任务统计日报）──
 SMTP_HOST=smtp.163.com
 SMTP_PORT=465
 SMTP_USE_SSL=true
+SMTP_START_TLS=false
 SMTP_USER=发件邮箱@163.com
 SMTP_PASSWORD=邮箱授权码
 SMTP_FROM=发件邮箱@163.com
-DAILY_REPORT_RECIPIENTS=收件邮箱@qq.com
 DAILY_REPORT_ENABLED=true
 DAILY_REPORT_HOUR=8
+DAILY_REPORT_MINUTE=0
+DAILY_REPORT_RECIPIENTS=收件邮箱@qq.com
+DAILY_REPORT_INCLUDE_EMPTY=true
+
+# ── 端口：服务器为本项目分配的 3 个 ──
+FRONTEND_PORT=4200
+MASTER_PORT=4201
+MINIO_CONSOLE_PORT=4203
+# DB_HOST_PORT=5432        # 供服务器内其他服务访问（默认已开）
+# REDIS_HOST_PORT=6380
 EOF
 chmod 600 .env
-
-# 3. 构建并启动全部服务（db / redis / minio / master / worker / frontend）
-docker compose up -d --build
-
-# 4. 校验（按需）
-docker compose ps
-curl -sf http://127.0.0.1:4200/ >/dev/null && echo "Web OK"
-curl -sf http://127.0.0.1:4201/docs >/dev/null && echo "API OK"
 ```
 
-> 首次启动会自动建库建表、创建默认管理员 `admin@admin.com / admin`，
-> **请登录后立即修改密码**（系统设置 → 用户管理）。
+### 步骤 3：覆盖生产安全项（`docker-compose.override.yml`，本机文件、不进 Git）
+
+`docker-compose.yml` 里的 `SECRET_KEY` 与初始管理员口令是**演示默认值**，生产必须替换。
+`docker compose` 会自动叠加 `docker-compose.override.yml`，因此**无需改动仓库文件**：
+
+```bash
+cd /opt/spidermanage
+cat > docker-compose.override.yml <<'EOF'
+# 生产环境覆盖项（本机文件，不提交到 Git；git pull 不会冲突）
+x-prod-env: &prod-env
+  SECRET_KEY: "请替换为 64 位随机串"                 # openssl rand -hex 32
+  FIRST_SUPERUSER_EMAIL: "ops@your-domain.com"
+  FIRST_SUPERUSER_PASSWORD: "请替换为强密码"
+
+services:
+  master:
+    environment:
+      <<: *prod-env
+  worker:
+    environment:
+      <<: *prod-env        # Worker 与 Master 的 SECRET_KEY 必须一致（镜像缓存指纹依赖它）
+    # 如需水平扩容：docker compose up -d --scale worker=3
+EOF
+chmod 600 docker-compose.override.yml
+```
+
+### 步骤 4：构建并启动全部服务
+
+```bash
+cd /opt/spidermanage
+docker compose up -d --build          # 首次约 3~8 分钟（构建前端与后端镜像）
+docker compose ps                     # 期望 6 个服务 Up
+```
+
+### 步骤 5：上线自检
+
+```bash
+# 端口与接口
+curl -sfI http://127.0.0.1:4200/ | head -1                 # HTTP/1.1 200 OK
+curl -sf  http://127.0.0.1:4201/docs >/dev/null && echo "API OK"
+curl -sfI http://127.0.0.1:4203/ | head -1                 # MinIO 控制台
+
+# 数据库（本项目）与容器网络
+docker exec spidermanage_db psql -U postgres -d spidermanage -c \
+  "select count(*) from information_schema.tables where table_schema='public';"
+
+# 数据库对服务器内其他服务可达（会打印 version）
+docker run --rm postgres:15-alpine psql \
+  "postgresql://postgres:postgrespassword@<服务器内网IP>:5432/spidermanage" -c "select version();"
+
+# 调度与日报
+docker logs --tail 60 spidermanage_master 2>&1 | grep -E "daily_task_report|report_settings_sync|Registered"
+
+# 邮件通道实测（用初始管理员账号换取令牌后发测试邮件）
+TOKEN=$(curl -s -X POST http://127.0.0.1:4201/api/users/login \
+  -d "username=<FIRST_SUPERUSER_EMAIL>&password=<FIRST_SUPERUSER_PASSWORD>" \
+  | sed -E 's/.*"access_token":"([^"]+)".*/\1/')
+curl -s -X POST http://127.0.0.1:4201/api/reports/settings/test-mail \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"recipients":null}'
+```
+
+浏览器登录 `http://服务器IP:4200`（或配置好域名后访问域名），
+进入 **系统设置** 页确认「SMTP 通道 = 可用」「下次发送时间」正确，然后**立即修改管理员密码**。
+
+### 步骤 6：开放防火墙（按服务器实际使用的防火墙二选一）
+
+```bash
+# firewalld（CentOS/RHEL 系）
+sudo firewall-cmd --permanent --add-port=4200/tcp --add-port=4201/tcp --add-port=4203/tcp
+sudo firewall-cmd --reload
+
+# ufw（Ubuntu/Debian 系）
+sudo ufw allow 4200/tcp && sudo ufw allow 4201/tcp && sudo ufw allow 4203/tcp
+```
+
+> ⚠️ **数据库端口安全**：`5432` 默认绑定在 `0.0.0.0`（供服务器内其他服务访问）。
+> 若只需内网可达，建议把 `docker-compose.yml` 中 db 的端口改为绑定具体内网网卡，
+> 例如 `- "10.0.0.5:5432:5432"`；或在 `DOCKER-USER` 链上限制来源网段
+> （注意：Docker 的端口发布**会绕过 ufw/firewalld 常规规则**，需用 iptables 限制）。
+> 云服务器还需在**安全组**中放行 4200/4201/4203。
 
 ---
 

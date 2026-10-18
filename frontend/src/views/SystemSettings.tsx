@@ -391,7 +391,7 @@ export default function SystemSettings() {
                             <input
                                 className="ss-input"
                                 value={form.smtp_user}
-                                placeholder="yihuishuju518@163.com"
+                                placeholder="spiderbot@example.com"
                                 onChange={e => update('smtp_user', e.target.value)}
                             />
                         </div>
