@@ -53,7 +53,7 @@ def test_build_image(mock_from_env):
             content = f.read()
             assert "WORKDIR /app" in content, "Incorrect Dockerfile content: WORKDIR /app missing"
             assert "COPY . /app/" in content, "Incorrect Dockerfile content: COPY . /app/ missing"
-            assert "CMD main.py" in content, "Incorrect entrypoint in Dockerfile"
+            assert 'CMD ["python", "main.py"]' in content, "Incorrect runtime argv in Dockerfile"
 
         # --- Second Build (Mocked - Image Exists) ---
         mock_client.images.get.side_effect = None # Remove the exception so it "exists"

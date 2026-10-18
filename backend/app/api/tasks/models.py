@@ -20,7 +20,8 @@ class SpiderTask(SQLModel, table=True):
         description="任务状态: pending / running / success / failed / timeout / error"
     )
     node_id: Optional[str] = Field(default=None, description="执行节点 ID")
-    command: Optional[str] = Field(default=None, description="执行命令")
+    entrypoint: Optional[str] = Field(default=None, description="快照：入口文件相对路径")
+    args: Optional[str] = Field(default=None, description="快照：运行参数（JSON 数组序列化存储）")
     error_detail: Optional[str] = Field(default=None, description="异常信息")
 
     # 软删除标记

@@ -8,6 +8,7 @@ from app.api.tasks.models import SpiderTask
 from sqlalchemy import select
 from config import settings
 from app.core.redis import redis_manager
+from app.core.run_config import resolve_stored_run_config, serialize_args
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,9 @@ async def dispatch_scheduled_task(
 ) -> None:
     """
     供 APScheduler 触发调用的任务分发逻辑。
-    通过 spider_id 查询 Spider 信息（language、source_url 等），构建 payload 后入列。
+    通过 spider_id 查询 Spider 信息（language、source_url、运行配置等），构建 payload 后入列。
+
+    运行配置以结构化的「入口文件 + 参数数组」形式下发，队列中不再出现整条命令字符串。
     """
 
     task_id = f"cron-{uuid.uuid4().hex[:8]}"
@@ -35,6 +38,17 @@ async def dispatch_scheduled_task(
                 logger.error(f"Cron dispatch failed: Spider {spider_id} not found")
                 return
 
+        run_config = resolve_stored_run_config(spider.entrypoint, spider.args)
+        if not run_config.is_runnable:
+            logger.error(
+                "Cron dispatch aborted for spider %s: run config status=%s (%s). "
+                "请重新编辑并保存该爬虫的运行配置。",
+                spider_id,
+                run_config.status,
+                run_config.detail or "no entrypoint",
+            )
+            return
+
         # 构建与 /api/tasks/run 一致的 task_payload
         task_payload = {
             "task_id": task_id,
@@ -43,10 +57,12 @@ async def dispatch_scheduled_task(
             "language": spider.language,
             "source_type": spider.source_type,
             "source_url": spider.source_url,
-            "script_path": spider.command or "main.py",
+            "entrypoint": run_config.entrypoint,
+            "args": run_config.args,
             "timeout_seconds": timeout_seconds,
         }
         task_data = json.dumps(task_payload)
+        args_json = serialize_args(run_config.args)
 
         if not redis_manager.client:
             logger.error("Redis client not available for cron dispatch")
@@ -66,7 +82,8 @@ async def dispatch_scheduled_task(
                     task_id=task_id,
                     spider_id=spider_id,
                     spider_name=spider.name,
-                    command=spider.command or "main.py",
+                    entrypoint=run_config.entrypoint,
+                    args=args_json,
                     status="pending",
                     node_id=node_identifier if node_identifier != "public" else None
                 )
@@ -83,7 +100,8 @@ async def dispatch_scheduled_task(
                 "spider_id": spider_id,
                 "node_target": node_identifier,
                 "status": "pending(cron)",
-                "script_path": spider.command or "main.py",
+                "entrypoint": run_config.entrypoint,
+                "args": run_config.args,
             }
             await redis_manager.client.set(status_key, json.dumps(initial_status), ex=settings.TASK_STATUS_EXPIRE_SECONDS)
 

@@ -5,4 +5,5 @@ COPY . .
 RUN find . -maxdepth 2 -not -path '*/.*'
 RUN chown -R spider:spider /work
 USER spider
-CMD ["sh", "-c", "{{ entrypoint }}"]
+# exec 形式 CMD：入口文件与参数各自成为独立 argv，不经过 Shell
+CMD {{ runtime_argv }}

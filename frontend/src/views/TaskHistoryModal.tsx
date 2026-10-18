@@ -146,9 +146,16 @@ export default function TaskHistoryModal({ spider, onClose, showToast }: TaskHis
                                                 </span>
                                             </td>
                                             <td>
-                                                <span className="th-task-id">
-                                                    {t.command || '-'}
+                                                <span className="th-task-id th-run-entrypoint">
+                                                    {t.entrypoint || '-'}
                                                 </span>
+                                                {t.args.length > 0 && (
+                                                    <div className="th-run-args">
+                                                        {t.args.map((arg, index) => (
+                                                            <span className="th-run-arg" key={`${index}-${arg}`}>{arg}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td>
                                                 <span className="th-time">{formatDateTime(t.created_at)}</span>

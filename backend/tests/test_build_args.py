@@ -39,7 +39,11 @@ def test_build_args_passed_to_buildkit(mock_get_runner, mock_docker_env):
         assert json.loads(params["buildargs"]) == {"PRIVATE_NPM_TOKEN": "secret-123"}
         mock_runner.prepare_context.assert_called_once_with(
             build_dir,
-            {"entrypoint": "main.py", "buildkit_enabled": True},
+            {
+                "entrypoint": "main.py",
+                "runtime_argv": '["python", "main.py"]',
+                "buildkit_enabled": True,
+            },
         )
 
         # 主路径成功时不应回退到经典 builder
@@ -111,10 +115,17 @@ def test_build_error_includes_build_log_for_task_persistence():
 
 def test_image_variant_hash_changes_with_build_args_without_exposing_them():
     token = "private-token-value"
-    first = _image_variant_hash("python", "main.py", {"PRIVATE_TOKEN": token})
-    second = _image_variant_hash("python", "main.py", {"PRIVATE_TOKEN": "rotated-token"})
+    first = _image_variant_hash("python", "main.py", [], {"PRIVATE_TOKEN": token})
+    second = _image_variant_hash("python", "main.py", [], {"PRIVATE_TOKEN": "rotated-token"})
     assert first != second
     assert token not in first
+
+
+def test_image_variant_hash_covers_entrypoint_and_args():
+    base = _image_variant_hash("python", "main.py", ["--mode", "all"], {})
+    assert base != _image_variant_hash("python", "main.py", ["--mode", "quick"], {})
+    assert base != _image_variant_hash("python", "spiders/main.py", ["--mode", "all"], {})
+    assert base == _image_variant_hash("python", "main.py", ["--mode", "all"], {})
 
 
 if __name__ == "__main__":

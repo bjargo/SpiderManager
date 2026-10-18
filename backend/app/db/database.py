@@ -26,6 +26,27 @@ _sync_engine = create_sync_engine(_sync_url, echo=False)
 # ========== 爬虫数据专属引擎 ==========
 spider_async_engine = create_async_engine(settings.SPIDER_DATABASE_URL, echo=False, pool_pre_ping=True)
 
+# 运行配置相关列。create_all 只建表、不会给已存在的表补列，因此启动时再做一次幂等补齐；
+# 全新部署时这些语句本身就是空操作，与原有部署流程一致，无需任何人工步骤。
+_RUN_CONFIG_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("spiders", "entrypoint"),
+    ("spiders", "args"),
+    ("spider_tasks", "entrypoint"),
+    ("spider_tasks", "args"),
+)
+
+
+def _ensure_run_config_columns() -> None:
+    """幂等补齐结构化运行配置列（已存在则跳过）。"""
+    with _sync_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        for table_name, column_name in _RUN_CONFIG_COLUMNS:
+            conn.execute(
+                text(
+                    f'ALTER TABLE "{table_name}" '
+                    f"ADD COLUMN IF NOT EXISTS {column_name} VARCHAR"
+                )
+            )
+
 
 def create_tables() -> None:
     """在应用启动时自动创建所有已注册的 SQLModel 表（如不存在）。"""
@@ -51,6 +72,13 @@ def create_tables() -> None:
         logger.info("Database tables created/verified successfully.")
     except Exception as e:
         logger.error(f"Failed to create database tables: {e}")
+        raise
+
+    try:
+        _ensure_run_config_columns()
+        logger.info("Run config columns verified successfully.")
+    except Exception as e:
+        logger.error(f"Failed to verify run config columns: {e}")
         raise
 
 

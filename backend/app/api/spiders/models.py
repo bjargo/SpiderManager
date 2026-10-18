@@ -18,9 +18,10 @@ class Spider(SQLModel, table=True):
     source_type: str = Field(description="代码源类型: MINIO 或 GIT")
     source_url: str = Field(description="MinIO Key 或 Git URL")
 
-    # 执行配置
+    # 执行配置（结构化运行配置）
     language: str = Field(default="python:3.11-slim", description="Docker 基础镜像名称")
-    command: Optional[str] = Field(default=None, description="执行命令，如 'python main.py'")
+    entrypoint: Optional[str] = Field(default=None, description="入口文件相对路径，如 'main.py'")
+    args: Optional[str] = Field(default=None, description="运行参数（JSON 数组序列化存储），如 '[\"--mode\",\"all\"]'")
     target_nodes: Optional[str] = Field(default=None, description="指定执行此爬虫的节点 IDs（JSON 序列化存储）")
 
     # 权限归属

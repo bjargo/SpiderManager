@@ -791,8 +791,9 @@ POST /api/tasks/run
 {
   "task_id": "task-uuid",
   "spider_id": 1,
-  "script_path": "python main.py",
-  "target_node_ids": ["node-uuid-1"],  // 可选，指定节点
+  "entrypoint": "main.py",              // 入口文件相对路径，省略则使用爬虫已保存的配置
+  "args": ["--mode", "all"],            // 运行参数数组，每一项对应一个独立参数
+  "target_node_ids": ["node-uuid-1"],   // 可选，指定节点
   "timeout_seconds": 3600
 }
 ```

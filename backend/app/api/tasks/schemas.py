@@ -23,10 +23,17 @@ class DataIngestRequest(BaseModel):
 class TaskRequest(BaseModel):
     """
     爬虫任务分发请求模型
+
+    运行配置以结构化的「入口文件 + 参数数组」提交；两者都为空时使用爬虫已保存的配置。
     """
     task_id: str = Field(..., description="统一的任务追溯 ID")
     spider_id: int = Field(..., description="关联的爬虫 ID，用于查询爬虫配置与代码源")
-    script_path: str = Field(..., description="具体的爬虫入口脚本，例如 'main.py'或'spiders/test.py'")
+    entrypoint: Optional[str] = Field(
+        None, description="入口文件相对路径，例如 'main.py'；为空则使用爬虫已保存的配置"
+    )
+    args: Optional[List[str]] = Field(
+        None, description="运行参数数组，每一项对应一个独立参数；为空则使用爬虫已保存的配置"
+    )
     target_node_ids: Optional[List[str]] = Field(None, description="指定执行此任务的节点 ID 列表；若为空，则分发到公共队列")
     timeout_seconds: int = Field(3600, description="任务执行超时时间（秒），默认1小时")
 

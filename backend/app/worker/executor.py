@@ -20,8 +20,14 @@ from app.worker.project_loader import load_project
 from app.worker.docker_manager import DockerManager
 from app.core.source.factory import SourceFactory
 from app.core.container.image_manager import image_manager, ImageBuildError
-from app.core.container.runners import normalize_entrypoint
 from app.core.container.runners import RunnerFactory
+from app.core.run_config import (
+    RunConfigError,
+    build_subprocess_argv,
+    deserialize_args,
+    flatten_entrypoint,
+    validate_entrypoint,
+)
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -33,9 +39,43 @@ def _format_build_error(error: Exception) -> str:
     return f"Build Failed: {error}"
 
 
+def _resolve_task_run_config(task_data: Dict[str, Any]) -> tuple[str, List[str]]:
+    """
+    解析队列消息中的结构化运行配置。
+
+    :param task_data: 队列任务消息
+    :return: (入口文件, 参数列表)
+    :raises RunConfigError: 缺少入口文件或配置不合法
+    """
+    entrypoint = task_data.get("entrypoint")
+    if not entrypoint:
+        raise RunConfigError("任务缺少入口文件（entrypoint）")
+
+    raw_args = task_data.get("args")
+    args = deserialize_args(raw_args) if raw_args is not None else []
+    return validate_entrypoint(entrypoint), args
+
+
+def _resolve_entrypoint_path(project_dir: str, entrypoint: str) -> str:
+    """
+    把入口文件解析为绝对路径，并确认其仍位于代码目录内。
+
+    :param project_dir: 代码解压目录
+    :param entrypoint: 已校验的相对入口文件路径
+    :return: 入口文件绝对路径
+    :raises ValueError: 入口文件逃逸出代码目录
+    """
+    project_root = os.path.realpath(project_dir)
+    candidate = os.path.realpath(os.path.join(project_root, entrypoint))
+    if candidate != project_root and not candidate.startswith(project_root + os.sep):
+        raise ValueError(f"Entrypoint '{entrypoint}' escapes the project directory")
+    return candidate
+
+
 def _image_variant_hash(
     language: str,
-    script_path: str,
+    entrypoint: str,
+    args: List[str],
     build_args: dict[str, str],
 ) -> str:
     runner = RunnerFactory.get_runner(language)
@@ -47,7 +87,10 @@ def _image_variant_hash(
     ).digest()
     digest = hashlib.sha256()
     digest.update(runner.get_cache_fingerprint().encode("ascii"))
-    digest.update(script_path.encode("utf-8"))
+    digest.update(entrypoint.encode("utf-8"))
+    for value in args:
+        digest.update(b"\x00")
+        digest.update(value.encode("utf-8"))
     digest.update(build_args_fingerprint)
     return digest.hexdigest()[:12]
 
@@ -191,7 +234,6 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
     project_id: str | None = task_data.get("project_id")
     source_type: str | None = task_data.get("source_type")
     source_url: str | None = task_data.get("source_url")
-    script_path: str | None = task_data.get("script_path")
     language: str | None = task_data.get("language")
 
     status_key = f"task:status:{task_id}:{NODE_ID}" if NODE_ID else f"task:status:{task_id}:public"
@@ -205,22 +247,23 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
 
     try:
         # 0. 防御性参数校验 (Defensive Validation & Type Narrowing)
-        if not source_type or not source_url or not script_path or not language or not project_id:
-            missing_fields = [
-                field_name
-                for field_name, val in [
-                    ("project_id", project_id),
-                    ("source_type", source_type),
-                    ("source_url", source_url),
-                    ("script_path", script_path),
-                    ("language", language),
-                ]
-                if not val
+        missing_fields = [
+            field_name
+            for field_name, val in [
+                ("project_id", project_id),
+                ("source_type", source_type),
+                ("source_url", source_url),
+                ("language", language),
             ]
+            if not val
+        ]
+        if missing_fields:
             raise ValueError(f"Task {task_id} missing required fields: {', '.join(missing_fields)}")
 
-        script_path = normalize_entrypoint(language, script_path)
-        task_data["script_path"] = script_path
+        # 运行配置：入口文件 + 参数数组
+        entrypoint, args = _resolve_task_run_config(task_data)
+        task_data["entrypoint"] = entrypoint
+        task_data["args"] = args
 
         # 1. 标记 running
         await _update_task_status(task_id, "running", node_id=NODE_ID, started_at=timezone.now())
@@ -235,7 +278,8 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
             build_args = task_data.get("build_args") or {}
             image_variant_hash = _image_variant_hash(
                 language,
-                script_path,
+                entrypoint,
+                args,
                 build_args,
             )
             version_hash: str | None = None
@@ -296,7 +340,8 @@ async def _execute_task_in_container(task_data: Dict[str, Any]) -> None:
                     local_path=project_dir,
                     language=language,
                     image_tag=image_tag,
-                    entrypoint=script_path,
+                    entrypoint=entrypoint,
+                    args=args,
                     build_args=build_args
                 )
                 task_data["image_tag"] = final_image_tag
@@ -456,11 +501,17 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
     project_id: str | None = task_data.get("project_id")
     source_type: str | None = task_data.get("source_type")
     source_url: str | None = task_data.get("source_url")
-    script_path: str | None = task_data.get("script_path")
+    language: str | None = task_data.get("language")
     timeout = task_data.get("timeout_seconds", 3600)
 
-    if not script_path or not project_id or not source_url or not source_type:
-        logger.error("Task %s is missing required fields: project_id, source_type, source_url, or script_path.", task_id)
+    if not project_id or not source_url or not source_type:
+        logger.error("Task %s is missing required fields: project_id, source_type, or source_url.", task_id)
+        return
+
+    try:
+        entrypoint, args = _resolve_task_run_config(task_data)
+    except RunConfigError as exc:
+        logger.error("Task %s has an invalid run config: %s", task_id, exc)
         return
 
     status_key = f"task:status:{task_id}:{NODE_ID}" if NODE_ID else f"task:status:{task_id}:public"
@@ -497,52 +548,43 @@ async def execute_task(task_data: Dict[str, Any]) -> None:
         # 2.3 自动打平目录结构 (针对子进程模式)
         try:
             flattened_dir = await asyncio.to_thread(image_manager._flatten_directory, project_dir)
-            if flattened_dir and script_path:
-                # 修正 script_path
-                parts = script_path.split()
-                new_parts = []
-                prefix = f"{flattened_dir}/"
-                for p in parts:
-                    if p.startswith(prefix):
-                        new_parts.append(p[len(prefix):])
-                    elif p == flattened_dir:
-                        new_parts.append(".")
-                    else:
-                        new_parts.append(p)
-                new_script_path = " ".join(new_parts)
-                if new_script_path != script_path:
-                    logger.info("Adjusted subprocess script_path from '%s' to '%s' due to flattening.", script_path, new_script_path)
-                    script_path = new_script_path
+            flattened_entrypoint = flatten_entrypoint(entrypoint, flattened_dir)
+            if flattened_entrypoint != entrypoint:
+                logger.info(
+                    "Adjusted subprocess entrypoint from '%s' to '%s' due to flattening.",
+                    entrypoint,
+                    flattened_entrypoint,
+                )
+                entrypoint = flattened_entrypoint
         except Exception as e:
             logger.warning("Failed to flatten directory in subprocess mode: %s", e)
 
-        # 2.5 校验脚本文件是否存在（防御空目录 / 下载失败的场景）
-        # script_path 形如 "python main.py"，提取实际的文件名部分
-        script_parts = script_path.strip().split()
-        script_file = script_parts[-1] if script_parts else script_path
-        full_script_path = os.path.join(project_dir, script_file)
-        if not os.path.isfile(full_script_path):
+        # 2.5 校验入口文件是否存在（防御空目录 / 下载失败的场景）
+        full_entrypoint_path = _resolve_entrypoint_path(project_dir, entrypoint)
+        if not os.path.isfile(full_entrypoint_path):
             error_msg = (
-                f"Script file '{script_file}' not found in project directory '{project_dir}'. "
+                f"Entrypoint '{entrypoint}' not found in project directory '{project_dir}'. "
                 f"Available files: {os.listdir(project_dir) if os.path.isdir(project_dir) else 'dir not found'}"
             )
             logger.error("Task %s: %s", task_id, error_msg)
             await _emit_log(task_id, channel, f"[SYSTEM: {error_msg}]")
             raise FileNotFoundError(error_msg)
 
-        logger.info("Task %s executing script: %s", task_id, script_path)
+        argv = build_subprocess_argv(language, entrypoint, args)
+        logger.info("Task %s executing argv: %s", task_id, argv)
 
         # 3. 使用 subprocess.Popen 拉起进程（跨平台兼容）
+        # 以 argv 数组 + shell=False 启动，参数不具备 Shell 语义
         # 注入 PYTHONUNBUFFERED=1 禁用 Python 子进程的输出缓冲，确保日志实时到达 pipe
         child_env = os.environ.copy()
         child_env["PYTHONUNBUFFERED"] = "1"
 
         process = subprocess.Popen(
-            script_path,
+            argv,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=project_dir,
-            shell=True,
+            shell=False,
             env=child_env,
         )
 

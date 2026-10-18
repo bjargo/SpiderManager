@@ -46,4 +46,5 @@ RUN if python -m pip show spidermanager-sdk >/dev/null 2>&1; then rm -f /app/spi
 RUN find . -maxdepth 2 -name "*.py"
 
 # 以 root 运行，undetected_chromedriver 在容器内需配合 --no-sandbox
-CMD {{ entrypoint }}
+# exec 形式 CMD：入口文件与参数各自成为独立 argv，不经过 Shell
+CMD {{ runtime_argv }}

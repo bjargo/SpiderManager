@@ -20,6 +20,12 @@ from app.api.tasks.models import SpiderTask, TaskLog
 from app.api.tasks.schemas import TaskRequest, TaskListResponse, DataIngestRequest
 from app.api.users.models import User
 from app.core.dependencies import verify_resource_owner
+from app.core.run_config import (
+    RunConfigError,
+    normalize_run_config_input,
+    resolve_stored_run_config,
+    serialize_args,
+)
 from app.core.timezone import now
 from app.core.sql import quote_identifier
 from app.db.database import async_session_maker, spider_async_engine
@@ -543,10 +549,12 @@ async def run_task(
     """
     根据传入的 spider_id 查询爬虫配置，构建 payload 并下发到 Redis 队列。
 
+    运行配置以结构化的「入口文件 + 参数数组」下发，队列消息中不再包含整条命令字符串。
+
     :param request: 任务下发请求体
     :param redis: Redis 客户端
     :return: {"task_id": ..., "queues": 目标队列列表}
-    :raises HTTPException: 404 — 爬虫不存在；500 — 下发失败
+    :raises HTTPException: 404 — 爬虫不存在；400 — 运行配置不合法或缺失；500 — 下发失败
     """
     async with async_session_maker() as session:
         result = await session.execute(
@@ -561,6 +569,23 @@ async def run_task(
         )
 
     try:
+        if request.entrypoint is not None or request.args is not None:
+            entrypoint, args = normalize_run_config_input(request.entrypoint, request.args)
+        else:
+            resolution = resolve_stored_run_config(spider.entrypoint, spider.args)
+            if not resolution.is_runnable:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="该爬虫尚未配置可用的入口文件，请先保存运行配置或在本请求中指定 entrypoint",
+                )
+            entrypoint, args = resolution.entrypoint, resolution.args
+    except RunConfigError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"运行配置不合法: {exc}",
+        ) from exc
+
+    try:
         task_payload = {
             "task_id": request.task_id,
             "spider_id": request.spider_id,
@@ -568,7 +593,8 @@ async def run_task(
             "language": spider.language or "default",
             "source_type": spider.source_type,
             "source_url": spider.source_url,
-            "script_path": request.script_path,
+            "entrypoint": entrypoint,
+            "args": args,
             "timeout_seconds": request.timeout_seconds,
         }
         task_data = json.dumps(task_payload)
@@ -580,13 +606,16 @@ async def run_task(
                 spider_id=request.spider_id,
                 spider_name=spider.name,
                 status="pending",
-                command=spider.command,
+                entrypoint=entrypoint,
+                args=serialize_args(args),
             )
             session.add(db_task)
             await session.commit()
 
         # 路由到正确的 Redis 队列
-        target_queues = await _dispatch_to_queues(request, task_data, redis)
+        target_queues = await _dispatch_to_queues(
+            request, task_data, redis, entrypoint=entrypoint, args=args
+        )
 
         return {"task_id": request.task_id, "queues": target_queues}
 
@@ -608,6 +637,9 @@ async def _dispatch_to_queues(
     request: TaskRequest,
     task_data: str,
     redis: Redis,
+    *,
+    entrypoint: str | None = None,
+    args: list[str] | None = None,
 ) -> list[str]:
     """
     将任务数据推送到目标 Redis 队列，并设置初始状态。
@@ -615,6 +647,8 @@ async def _dispatch_to_queues(
     :param request: 任务请求对象
     :param task_data: 序列化后的任务 JSON 字符串
     :param redis: Redis 客户端
+    :param entrypoint: 本次任务实际使用的入口文件
+    :param args: 本次任务实际使用的参数列表
     :return: 目标队列键名列表
     """
     target_queues: list[str] = []
@@ -635,7 +669,8 @@ async def _dispatch_to_queues(
             "spider_id": request.spider_id,
             "node_target": node_identifier,
             "status": "pending",
-            "script_path": request.script_path,
+            "entrypoint": entrypoint,
+            "args": args or [],
         }
         await redis.set(status_key, json.dumps(initial_status), ex=settings.TASK_STATUS_EXPIRE_SECONDS)
         logger.info(f"Task {request.task_id} dispatched to {target_queue}")

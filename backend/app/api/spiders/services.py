@@ -20,6 +20,13 @@ from app.api.tasks.models import SpiderTask, TaskLog
 from app.api.users.models import User
 from app.core.dependencies import verify_resource_owner
 from app.core.enums import UserRole
+from app.core.run_config import (
+    RunConfigError,
+    normalize_run_config_input,
+    normalize_run_config_update,
+    resolve_stored_run_config,
+    serialize_args,
+)
 from app.core.storage.minio_client import minio_manager
 from app.core.storage.zip_helper import (
     check_protected_file, validate_file_path,
@@ -31,6 +38,16 @@ from app.core.timezone import now
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_spider_run_config(spider: Spider):
+    """
+    读取爬虫当前生效的运行配置。
+
+    :param spider: Spider ORM 对象
+    :return: RunConfigResolution
+    """
+    return resolve_stored_run_config(spider.entrypoint, spider.args)
 
 
 async def upload_zip(file: UploadFile) -> str:
@@ -66,11 +83,23 @@ async def create_spider(
     """
     创建一个新的爬虫记录。
 
+    运行配置以结构化的「入口文件 + 参数数组」写入。
+
     :param spider_in: 爬虫创建请求 schema
     :param operator: 当前操作者用户对象
     :param session: 异步数据库会话
     :return: 创建后的 Spider ORM 对象
+    :raises HTTPException: 400 — 运行配置不合法
     """
+    provided = spider_in.model_dump(exclude_unset=True)
+    try:
+        entrypoint, args = normalize_run_config_input(
+            provided.get("entrypoint"),
+            provided.get("args"),
+        )
+    except RunConfigError as exc:
+        raise HTTPException(status_code=400, detail=f"运行配置不合法: {exc}") from exc
+
     target_nodes_str = json.dumps(spider_in.target_nodes) if spider_in.target_nodes else None
     db_spider = Spider(
         name=spider_in.name,
@@ -79,7 +108,8 @@ async def create_spider(
         source_type=spider_in.source_type,
         source_url=spider_in.source_url,
         language=spider_in.language or "python:3.11-slim",
-        command=spider_in.command,
+        entrypoint=entrypoint,
+        args=serialize_args(args),
         target_nodes=target_nodes_str,
         owner_id=operator.id,
     )
@@ -153,17 +183,37 @@ async def update_spider(
     """
     更新指定爬虫的信息。
 
+    若请求中携带了 ``entrypoint`` / ``args``，则重新解析并写入结构化字段；
+    未提交的部分沿用记录当前值。
+
     :param spider_id: 爬虫主键 ID
     :param spider_in: 爬虫更新请求 schema（仅包含需更新的字段）
     :param operator: 当前操作者
     :param session: 异步数据库会话
     :return: 更新后的 Spider ORM 对象
-    :raises HTTPException: 404 — 爬虫不存在；403 — 无权操作
+    :raises HTTPException: 404 — 爬虫不存在；403 — 无权操作；400 — 运行配置不合法
     """
     spider = await get_spider_by_id(spider_id, session)
     verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
 
     update_data = spider_in.dict(exclude_unset=True)
+
+    run_config_touched = any(
+        key in spider_in.model_fields_set for key in ("entrypoint", "args")
+    )
+    if run_config_touched:
+        provided = spider_in.model_dump(exclude_unset=True)
+        try:
+            entrypoint, args = normalize_run_config_update(
+                spider.entrypoint,
+                spider.args,
+                provided,
+            )
+        except RunConfigError as exc:
+            raise HTTPException(status_code=400, detail=f"运行配置不合法: {exc}") from exc
+        update_data["entrypoint"] = entrypoint
+        update_data["args"] = serialize_args(args)
+
     if "target_nodes" in update_data:
         update_data["target_nodes"] = (
             json.dumps(update_data["target_nodes"]) if update_data["target_nodes"] else None
@@ -363,12 +413,22 @@ async def run_spider(
     :param session: 异步数据库会话
     :param redis: Redis 客户端
     :return: 新创建的任务 ID
-    :raises HTTPException: 404 — 爬虫不存在；500 — 推送失败
+    :raises HTTPException: 404 — 爬虫不存在；400 — 运行配置缺失或无法解析；500 — 推送失败
     """
     spider = await get_spider_by_id(spider_id, session)
     verify_resource_owner(spider.owner_id, operator, resource_name="爬虫")
 
+    run_config = _resolve_spider_run_config(spider)
+    if not run_config.is_runnable:
+        detail = (
+            "该爬虫的运行配置无法安全解析，请重新编辑并保存入口文件与参数"
+            if run_config.status == "unparsed"
+            else "该爬虫尚未配置入口文件，请先编辑并保存运行配置"
+        )
+        raise HTTPException(status_code=400, detail=detail)
+
     task_id = str(uuid.uuid4())
+    args_json = serialize_args(run_config.args)
 
     payload = {
         "task_id": task_id,
@@ -376,7 +436,8 @@ async def run_spider(
         "source_type": spider.source_type,
         "source_url": spider.source_url,
         "language": spider.language or "default",
-        "script_path": spider.command,
+        "entrypoint": run_config.entrypoint,
+        "args": run_config.args,
         "timeout_seconds": body.timeout_seconds or 3600,
     }
 
@@ -385,7 +446,8 @@ async def run_spider(
         spider_id=spider_id,
         spider_name=spider.name,
         status="pending",
-        command=spider.command,
+        entrypoint=run_config.entrypoint,
+        args=args_json,
     )
     session.add(db_task)
     await session.commit()

@@ -23,4 +23,5 @@ RUN find . -maxdepth 2 -not -path '*/.*' && \
     chown -R spider:spider /app
 
 USER spider
-CMD {{ entrypoint }}
+# exec 形式 CMD：入口文件与参数各自成为独立 argv，不经过 Shell
+CMD {{ runtime_argv }}

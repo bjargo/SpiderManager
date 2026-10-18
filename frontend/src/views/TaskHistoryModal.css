@@ -281,3 +281,24 @@
         transform: rotate(360deg);
     }
 }
+/* ====== 结构化运行配置展示（入口文件 + 参数） ====== */
+.th-run-entrypoint {
+    color: var(--text-primary);
+}
+
+.th-run-args {
+    margin-top: 3px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.th-run-arg {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: var(--info-soft);
+    border: 1px solid var(--border-color);
+}

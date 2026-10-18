@@ -807,3 +807,106 @@
     margin-right: 4px;
     background: var(--success);
 }
+/* ====== 结构化运行配置（入口文件 + 参数数组） ====== */
+.sv-field-hint {
+    margin-top: 6px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.sv-args-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sv-args-empty {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    padding: 8px 10px;
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+}
+
+.sv-arg-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sv-arg-index {
+    flex: 0 0 22px;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.sv-arg-row input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sv-arg-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.sv-arg-actions .sv-btn-icon:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.sv-arg-add {
+    align-self: flex-start;
+}
+
+.sv-raw-command {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sv-raw-command input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sv-run-config-alert {
+    margin-top: 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--warning-border, var(--border-color));
+    border-radius: 8px;
+    font-size: 0.8rem;
+    color: var(--warning, var(--text-primary));
+    line-height: 1.6;
+}
+
+.sv-run-config {
+    margin-top: 3px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-family: monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.sv-run-entry {
+    color: var(--text-primary);
+}
+
+.sv-run-arg {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--bg-elevated, var(--info-soft));
+    border: 1px solid var(--border-color);
+}
+
+.sv-run-warn {
+    margin-top: 3px;
+    font-size: 0.72rem;
+    color: var(--danger);
+}

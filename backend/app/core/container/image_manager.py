@@ -9,6 +9,7 @@ from docker.errors import APIError, BuildError, DockerException, ImageNotFound
 from docker.utils.build import exclude_paths
 from requests.exceptions import RequestException
 from app.core.container.runners import RunnerFactory
+from app.core.run_config import build_exec_argv, flatten_entrypoint
 
 
 logger = logging.getLogger(__name__)
@@ -130,10 +131,14 @@ class ImageManager:
         language: str,
         image_tag: str,
         entrypoint: str,
+        args: list[str] | None = None,
         build_args: dict[str, str] | None = None,
     ) -> str:
         """
         核心构建逻辑：基于插件架构动态渲染 Dockerfile、.dockerignore 和启动 Docker build 进程。
+
+        入口文件与参数以 argv 数组的形式写入 Dockerfile 的 exec 形式 CMD，
+        不再拼接 Shell 命令字符串。
         Returns:
             str: The image tag built.
         """
@@ -150,26 +155,22 @@ class ImageManager:
         # 强制打平目录结构
         flattened_dir = self._flatten_directory(local_path)
         if flattened_dir and entrypoint:
-            # 修正 entrypoint。如果 entrypoint 是 "python subdir/main.py"，
-            # 在打平后应变为 "python main.py"。
-            parts = entrypoint.split()
-            new_parts = []
-            prefix = f"{flattened_dir}/"
-            for p in parts:
-                if p.startswith(prefix):
-                    new_parts.append(p[len(prefix):])
-                elif p == flattened_dir:
-                    new_parts.append(".")
-                else:
-                    new_parts.append(p)
-            new_entrypoint = " ".join(new_parts)
-            if new_entrypoint != entrypoint:
-                logger.info(f"Adjusted entrypoint from '{entrypoint}' to '{new_entrypoint}' due to flattening.")
-                entrypoint = new_entrypoint
+            flattened_entrypoint = flatten_entrypoint(entrypoint, flattened_dir)
+            if flattened_entrypoint != entrypoint:
+                logger.info(
+                    "Adjusted entrypoint from '%s' to '%s' due to flattening.",
+                    entrypoint,
+                    flattened_entrypoint,
+                )
+                entrypoint = flattened_entrypoint
 
         # Only non-secret Dockerfile options belong in the rendered build context.
         # Build arguments are passed separately to the Docker API below.
-        context_vars = {"entrypoint": entrypoint, "buildkit_enabled": True}
+        context_vars = {
+            "entrypoint": entrypoint,
+            "runtime_argv": json.dumps(build_exec_argv(language, entrypoint, args or [])),
+            "buildkit_enabled": True,
+        }
         runner.prepare_context(local_path, context_vars)
 
         # 3. 调用 Docker Engine 构建镜像

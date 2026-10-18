@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, DragEvent } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Bug, Plus, Play, Pencil, Trash2, X, Copy, Check, UploadCloud, GitBranch, Server, Loader2, ChevronDown, Code, History } from 'lucide-react';
+import { Bug, Plus, Play, Pencil, Trash2, X, Copy, Check, UploadCloud, GitBranch, Server, Loader2, ChevronDown, ChevronUp, Code, History } from 'lucide-react';
 import CodeEditorModal from './CodeEditorModal';
 import TaskHistoryModal from './TaskHistoryModal';
 import DangerConfirmModal from '@/components/DangerConfirmModal';
@@ -17,6 +17,7 @@ import { fetchNodeList } from '@/api/node';
 import { fetchProjectList, type ProjectItem } from '@/api/project';
 import type { SpiderItem, SpiderCreatePayload, SourceType } from '@/types/spider';
 import type { SpiderNode } from '@/types/node';
+import { DEFAULT_ENTRYPOINTS, normalizeArgsDraft, splitCommandLine } from '@/utils/runConfig';
 import './SpidersView.css';
 
 // ─────────────────────────────────────────────────
@@ -182,7 +183,12 @@ function SpiderDrawer({ mode, initial, onClose, onSaved, showToast, projects }: 
     // 公共字段
     const [name, setName] = useState(initial?.name ?? '');
     const [language, setLanguage] = useState(initial?.language ?? 'python:3.11-slim');
-    const [command, setCommand] = useState(initial?.command ?? '');
+    // 运行配置：入口文件 + 参数数组（不再提交整条命令字符串）
+    const [entrypoint, setEntrypoint] = useState(
+        initial?.entrypoint ?? DEFAULT_ENTRYPOINTS[initial?.language ?? 'python:3.11-slim'] ?? ''
+    );
+    const [args, setArgs] = useState<string[]>(initial?.args ?? []);
+    const [rawCommand, setRawCommand] = useState('');
     const [projectId, setProjectId] = useState(initial?.project_id ?? (projects.length > 0 ? projects[0].project_id : 'default'));
 
     // 预设语言选项及默认命令
@@ -193,22 +199,61 @@ function SpiderDrawer({ mode, initial, onClose, onSaved, showToast, projects }: 
         { label: '系统默认环境', value: 'default' },
     ];
 
-    const defaultCommands: Record<string, string> = {
-        'python:3.11-slim': 'main.py',
-        'nodejs:18-slim': 'index.js',
-        'golang:1.21-alpine': 'main.go',
-        'default': 'run.sh',
-    };
-
-    // 语言改变时，如果当前 command 为空或者是之前语言的默认 command，则自动填充
+    // 语言改变时，如果当前入口文件为空或者是之前语言的默认入口，则自动填充
     const handleLanguageChange = (newLang: string) => {
-        const oldDefault = defaultCommands[language];
-        const newDefault = defaultCommands[newLang] || '';
+        const oldDefault = DEFAULT_ENTRYPOINTS[language];
+        const newDefault = DEFAULT_ENTRYPOINTS[newLang] || '';
 
-        if (!command.trim() || command.trim() === oldDefault) {
-            setCommand(newDefault);
+        if (!entrypoint.trim() || entrypoint.trim() === oldDefault) {
+            setEntrypoint(newDefault);
         }
         setLanguage(newLang);
+    };
+
+    const updateArg = (index: number, value: string) => {
+        setArgs(prev => prev.map((item, i) => (i === index ? value : item)));
+    };
+
+    const addArg = () => setArgs(prev => [...prev, '']);
+
+    const removeArg = (index: number) => {
+        setArgs(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const moveArg = (index: number, delta: number) => {
+        setArgs(prev => {
+            const target = index + delta;
+            if (target < 0 || target >= prev.length) return prev;
+            const next = [...prev];
+            [next[index], next[target]] = [next[target], next[index]];
+            return next;
+        });
+    };
+
+    // 便利功能：粘贴整条命令后仅在本浏览器内拆分为两个字段
+    const applyRawCommand = () => {
+        const parsed = splitCommandLine(rawCommand);
+        if (!parsed) {
+            showToast('无法拆分该命令，请直接填写入口文件与参数', 'error');
+            return;
+        }
+        setEntrypoint(parsed.entrypoint);
+        setArgs(parsed.args);
+        setRawCommand('');
+    };
+
+    /** 校验并生成待提交的结构化运行配置 */
+    const buildRunConfig = (): { entrypoint: string; args: string[] } | null => {
+        const trimmedEntrypoint = entrypoint.trim();
+        if (!trimmedEntrypoint) {
+            showToast('请填写入口文件，例如 main.py', 'error');
+            return null;
+        }
+        if (/\s/.test(trimmedEntrypoint)) {
+            showToast('入口文件是单个文件路径，不能包含空格；参数请填入参数列表', 'error');
+            return null;
+        }
+        return { entrypoint: trimmedEntrypoint, args: normalizeArgsDraft(args) };
     };
 
     // MinIO 字段
@@ -267,6 +312,8 @@ function SpiderDrawer({ mode, initial, onClose, onSaved, showToast, projects }: 
 
     const handleSubmit = async () => {
         if (!canSubmit()) return;
+        const runConfig = buildRunConfig();
+        if (!runConfig) return;
         setSubmitting(true);
         try {
             if (mode === 'create') {
@@ -309,7 +356,8 @@ function SpiderDrawer({ mode, initial, onClose, onSaved, showToast, projects }: 
                 const payload: SpiderCreatePayload = {
                     name: name.trim(),
                     language: language,
-                    command: command.trim() || undefined,
+                    entrypoint: runConfig.entrypoint,
+                    args: runConfig.args,
                     project_id: projectId,
                     source_type: sourceType,
                     source_url: sourceUrl,
@@ -325,7 +373,8 @@ function SpiderDrawer({ mode, initial, onClose, onSaved, showToast, projects }: 
                 const res = await updateSpider(initial.id, {
                     name: name.trim(),
                     language: language,
-                    command: command.trim() || undefined,
+                    entrypoint: runConfig.entrypoint,
+                    args: runConfig.args,
                     project_id: projectId,
                 });
                 if (res.code === 200) {
@@ -493,14 +542,93 @@ function SpiderDrawer({ mode, initial, onClose, onSaved, showToast, projects }: 
                         />
                     </div>
                     <div className="sv-field">
-                        <label>启动命令（可选，入口文件即可）</label>
+                        <label>入口文件 *</label>
                         <input
                             type="text"
-                            value={command}
-                            onChange={e => setCommand(e.target.value)}
-                            placeholder="例如：main.py"
+                            value={entrypoint}
+                            onChange={e => setEntrypoint(e.target.value)}
+                            placeholder="例如：main.py（不包含 python 前缀）"
                         />
+                        <div className="sv-field-hint">代码包内的相对路径，例如 main.py / spiders/test.py</div>
                     </div>
+
+                    <div className="sv-field">
+                        <label>运行参数</label>
+                        <div className="sv-args-editor">
+                            {args.length === 0 && (
+                                <div className="sv-args-empty">暂无参数，例如 --mode / all 各占一项</div>
+                            )}
+                            {args.map((arg, index) => (
+                                <div className="sv-arg-row" key={index}>
+                                    <span className="sv-arg-index">{index + 1}</span>
+                                    <input
+                                        type="text"
+                                        value={arg}
+                                        onChange={e => updateArg(index, e.target.value)}
+                                        placeholder="例如：--mode"
+                                    />
+                                    <div className="sv-arg-actions">
+                                        <button
+                                            type="button"
+                                            className="sv-btn-icon"
+                                            title="上移"
+                                            disabled={index === 0}
+                                            onClick={() => moveArg(index, -1)}
+                                        >
+                                            <ChevronUp size={13} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="sv-btn-icon"
+                                            title="下移"
+                                            disabled={index === args.length - 1}
+                                            onClick={() => moveArg(index, 1)}
+                                        >
+                                            <ChevronDown size={13} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="sv-btn-icon del"
+                                            title="删除参数"
+                                            onClick={() => removeArg(index)}
+                                        >
+                                            <X size={13} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                            <button type="button" className="sv-btn sv-btn-ghost sv-arg-add" onClick={addArg}>
+                                <Plus size={13} /> 添加参数
+                            </button>
+                        </div>
+                        <div className="sv-field-hint">每一项对应一个独立参数，顺序即为传参顺序；参数内部空格会保留</div>
+                    </div>
+
+                    <div className="sv-field">
+                        <label>从完整命令拆分（仅本地解析，不会提交整条命令）</label>
+                        <div className="sv-raw-command">
+                            <input
+                                type="text"
+                                value={rawCommand}
+                                onChange={e => setRawCommand(e.target.value)}
+                                placeholder="粘贴旧命令，例如：python main.py --mode all"
+                            />
+                            <button
+                                type="button"
+                                className="sv-btn sv-btn-ghost"
+                                disabled={!rawCommand.trim()}
+                                onClick={applyRawCommand}
+                            >
+                                拆分
+                            </button>
+                        </div>
+                    </div>
+
+                    {initial?.run_config_status === 'unparsed' && (
+                        <div className="sv-run-config-alert">
+                            该爬虫已保存的运行配置无法解析，请确认下方入口文件与参数后保存。
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer */}
@@ -802,10 +930,16 @@ export default function SpidersView() {
                                         <span className="sv-spider-name">
                                             {s.name}
                                         </span>
-                                        {s.command && (
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2, fontFamily: 'monospace' }}>
-                                                $ {s.command}
+                                        {s.entrypoint && (
+                                            <div className="sv-run-config" title={`${s.entrypoint} ${s.args.join(' ')}`}>
+                                                <span className="sv-run-entry">{s.entrypoint}</span>
+                                                {s.args.map((arg, index) => (
+                                                    <span className="sv-run-arg" key={`${index}-${arg}`}>{arg}</span>
+                                                ))}
                                             </div>
+                                        )}
+                                        {s.run_config_status === 'unparsed' && (
+                                            <div className="sv-run-warn">运行配置需人工确认</div>
                                         )}
                                     </td>
                                     <td>

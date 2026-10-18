@@ -240,6 +240,10 @@ docker exec spidermanage_db pg_dump -U postgres spidermanage > backup_$(date +%F
 docker exec spidermanage_db pg_dump -U postgres Spider      > backup_spider_$(date +%F).sql
 ```
 
+> **数据库结构自动创建**：无需执行任何迁移脚本或人工操作。Master 容器启动时会自动创建
+> 缺失的表并补齐运行配置列（幂等，重复启动安全），全新部署时与原有流程完全一致。
+> 启动日志中可看到 `Database tables created/verified` 相关记录。
+
 ---
 
 ## 五、上线后自检清单

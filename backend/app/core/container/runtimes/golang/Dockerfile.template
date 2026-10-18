@@ -24,4 +24,5 @@ RUN find . -maxdepth 2
 RUN chown -R spider:spider /app
 USER spider
 
-CMD ["/app/spider_bin"]
+# exec 形式 CMD：编译产物 + 参数各自成为独立 argv，不经过 Shell
+CMD {{ runtime_argv }}
