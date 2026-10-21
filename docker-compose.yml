@@ -271,7 +271,7 @@ services:
   #   ⚠️ S3 API(9000) 无需对外发布：Master 与爬虫容器都在容器网络内直连 minio:9000
   # ────────────────────────────────────────────
   minio:
-    image: minio/minio:RELEASE.2022-10-29T06-21-33Z
+    image: pgsty/silo:latest
     container_name: spidermanage_minio
     restart: always
     ports:
